@@ -7,14 +7,11 @@ from src.machineguard.config import PROJECT_ROOT
 
 
 DATASET_URL = (
-    "https://archive.ics.uci.edu/ml/"
-    "machine-learning-databases/00601/ai4i2020.csv"
+    "https://archive.ics.uci.edu/ml/machine-learning-databases/00601/ai4i2020.csv"
 )
 
 RAW_DATA_PATH = PROJECT_ROOT / "data/raw/ai4i2020.csv"
-PROCESSED_DATA_PATH = (
-    PROJECT_ROOT / "data/processed/machine_data.csv"
-)
+PROCESSED_DATA_PATH = PROJECT_ROOT / "data/processed/machine_data.csv"
 
 COLUMN_MAPPING = {
     "Type": "type",
@@ -45,10 +42,7 @@ def download_dataset() -> Path:
     )
 
     if RAW_DATA_PATH.exists():
-        print(
-            f"Raw dataset already exists: "
-            f"{RAW_DATA_PATH}"
-        )
+        print(f"Raw dataset already exists: {RAW_DATA_PATH}")
         return RAW_DATA_PATH
 
     print("Downloading AI4I 2020 dataset...")
@@ -63,20 +57,13 @@ def prepare_dataset(raw_path: Path) -> Path:
     dataframe = pd.read_csv(raw_path)
 
     missing_columns = [
-        column
-        for column in COLUMN_MAPPING
-        if column not in dataframe.columns
+        column for column in COLUMN_MAPPING if column not in dataframe.columns
     ]
 
     if missing_columns:
-        raise ValueError(
-            "Dataset is missing expected columns: "
-            f"{missing_columns}"
-        )
+        raise ValueError(f"Dataset is missing expected columns: {missing_columns}")
 
-    processed = dataframe.rename(
-        columns=COLUMN_MAPPING
-    )
+    processed = dataframe.rename(columns=COLUMN_MAPPING)
 
     processed = processed[MODEL_COLUMNS].copy()
 
@@ -90,15 +77,9 @@ def prepare_dataset(raw_path: Path) -> Path:
         index=False,
     )
 
-    print(
-        f"Processed dataset saved to: "
-        f"{PROCESSED_DATA_PATH}"
-    )
+    print(f"Processed dataset saved to: {PROCESSED_DATA_PATH}")
     print(f"Dataset shape: {processed.shape}")
-    print(
-        "Machine failure rate: "
-        f"{processed['machine_failure'].mean():.4f}"
-    )
+    print(f"Machine failure rate: {processed['machine_failure'].mean():.4f}")
 
     return PROCESSED_DATA_PATH
 

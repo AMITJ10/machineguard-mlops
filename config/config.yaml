@@ -12,20 +12,29 @@ data:
   validation_size: 0.20
 
 model:
-  registered_name: machineguard_failure_classifier
-  champion_alias: champion
-  candidate_alias: candidate
+  threshold: 0.50
+
+training:
+  n_estimators: 300
+  max_depth: null
+  min_samples_split: 2
 
 quality_gate:
-  minimum_roc_auc: 0.85
+  minimum_roc_auc: 0.95
+  minimum_pr_auc: 0.80
   minimum_recall: 0.75
-  minimum_precision: 0.40
-  maximum_log_loss: 0.50
-  maximum_recall_drop: 0.03
+  minimum_precision: 0.70
+  maximum_log_loss: 0.15
+  maximum_business_cost: 2000000
 
 mlflow:
-  tracking_uri: http://localhost:5000
+  tracking_uri: sqlite:///mlflow.db
   experiment_name: predictive-maintenance
+
+registry:
+  model_name: MachineGuardFailureClassifier
+  candidate_alias: candidate
+  champion_alias: champion
 
 storage:
   provider: local

@@ -1,0 +1,15 @@
+{
+  "accuracy": 0.9885,
+  "precision": 0.8571428571428571,
+  "recall": 0.7941176470588235,
+  "f1": 0.8244274809160306,
+  "roc_auc": 0.9792808427718913,
+  "pr_auc": 0.8633263410757512,
+  "log_loss": 0.046961569385230856,
+  "true_positive": 54,
+  "true_negative": 1923,
+  "false_positive": 9,
+  "false_negative": 14,
+  "business_cost": 1445000.0,
+  "threshold": 0.5
+}

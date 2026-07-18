@@ -1,0 +1,133 @@
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.1.4
+    container_name: machineguard-mlflow
+    restart: unless-stopped
+
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - sqlite:////mlflow/mlflow.db
+      - --serve-artifacts
+      - --artifacts-destination
+      - /mlflow/artifacts
+
+    ports:
+      - "5000:5000"
+
+    volumes:
+      - mlflow_data:/mlflow
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    networks:
+      - machineguard-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: machineguard-api:latest
+    container_name: machineguard-api
+    restart: unless-stopped
+
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_REGISTRY_URI: http://mlflow:5000
+      MODEL_NAME: MachineGuardFailureClassifier
+      MODEL_ALIAS: champion
+      LOG_LEVEL: INFO
+      PYTHONPATH: /app
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+    volumes:
+      - prediction_logs:/app/logs
+      - monitoring_reports:/app/reports
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+    networks:
+      - machineguard-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+
+    image: machineguard-frontend:latest
+    container_name: machineguard-frontend
+    restart: unless-stopped
+
+    environment:
+      API_URL: http://api:8000
+      PYTHONPATH: /app
+
+    ports:
+      - "8501:8501"
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    volumes:
+      - prediction_logs:/app/logs:ro
+      - monitoring_reports:/app/reports:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+    networks:
+      - machineguard-network
+
+volumes:
+  mlflow_data:
+  prediction_logs:
+  monitoring_reports:
+
+networks:
+  machineguard-network:
+    driver: bridge

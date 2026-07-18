@@ -1,0 +1,70 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Testing and quality tools
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# MLflow local storage
+mlflow.db
+mlflow-backup.db
+mlruns/
+
+# Runtime logs
+logs/
+*.log
+
+# Generated artifacts
+artifacts/*.joblib
+artifacts/*.pkl
+artifacts/*.pickle
+
+# Generated monitoring outputs
+reports/monitoring/
+reports/drift/
+reports/figures/*.png
+reports/figures/*.jpg
+reports/figures/*.jpeg
+
+# Data files
+data/raw/*
+data/processed/*
+data/reference/*
+data/current/*
+
+# Keep placeholder files
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/reference/.gitkeep
+!data/current/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+
+# Operating system files
+.DS_Store
+Thumbs.db

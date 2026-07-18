@@ -54,13 +54,9 @@ def validate_machine_data(
         lazy=True,
     )
 
-    duplicate_count = int(
-        validated_dataframe.duplicated().sum()
-    )
+    duplicate_count = int(validated_dataframe.duplicated().sum())
 
     if duplicate_count > 0:
-        raise ValueError(
-            f"Dataset contains {duplicate_count} duplicate rows."
-        )
+        raise ValueError(f"Dataset contains {duplicate_count} duplicate rows.")
 
     return validated_dataframe
