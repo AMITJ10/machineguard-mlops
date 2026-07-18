@@ -1,0 +1,32 @@
+project:
+  name: machineguard
+  random_state: 42
+
+data:
+  raw_path: data/raw/ai4i2020.csv
+  processed_path: data/processed/machine_data.csv
+  reference_path: data/reference/reference.csv
+  current_path: data/current/current.csv
+  target_column: machine_failure
+  test_size: 0.20
+  validation_size: 0.20
+
+model:
+  registered_name: machineguard_failure_classifier
+  champion_alias: champion
+  candidate_alias: candidate
+
+quality_gate:
+  minimum_roc_auc: 0.85
+  minimum_recall: 0.75
+  minimum_precision: 0.40
+  maximum_log_loss: 0.50
+  maximum_recall_drop: 0.03
+
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: predictive-maintenance
+
+storage:
+  provider: local
+  bucket_name: machineguard-mlops-artifacts
