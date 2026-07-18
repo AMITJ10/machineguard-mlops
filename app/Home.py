@@ -1,3 +1,5 @@
+"""MachineGuard Streamlit prediction application."""
+
 from __future__ import annotations
 
 import os
@@ -6,47 +8,76 @@ from typing import Any
 import requests
 import streamlit as st
 
-
 API_URL = os.getenv(
     "API_URL",
     "http://127.0.0.1:8000",
 ).rstrip("/")
 
-REQUEST_TIMEOUT_SECONDS = 30
+READINESS_TIMEOUT_SECONDS = 5
+PREDICTION_TIMEOUT_SECONDS = 30
 
 
 def get_api_readiness() -> dict[str, Any] | None:
-    """Return API readiness information when available."""
+    """Return API model-readiness information."""
     try:
         response = requests.get(
             f"{API_URL}/ready",
-            timeout=5,
+            timeout=READINESS_TIMEOUT_SECONDS,
         )
+
         response.raise_for_status()
-        return response.json()
-    except requests.RequestException:
+
+        result = response.json()
+
+        if isinstance(result, dict):
+            return result
+
+        return None
+
+    except (
+        requests.RequestException,
+        ValueError,
+    ):
         return None
 
 
 def submit_prediction(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Send one machine record to the prediction API."""
+    """Send one machine record to the API.
+
+    Args:
+        payload: Validated machine measurements.
+
+    Returns:
+        Prediction API response.
+
+    Raises:
+        requests.HTTPError: If the API returns an
+            unsuccessful status.
+        requests.RequestException: If the request fails.
+        ValueError: If the API response is invalid.
+    """
     response = requests.post(
         f"{API_URL}/predict",
         json=payload,
-        timeout=REQUEST_TIMEOUT_SECONDS,
+        timeout=PREDICTION_TIMEOUT_SECONDS,
     )
 
     response.raise_for_status()
 
-    return response.json()
+    result = response.json()
+
+    if not isinstance(result, dict):
+        raise ValueError("Prediction API returned an invalid response.")
+
+    return result
 
 
 def display_prediction(
     result: dict[str, Any],
 ) -> None:
-    """Display prediction information."""
+    """Display prediction results in Streamlit."""
     probability = float(result["failure_probability"])
 
     risk_level = str(result["risk_level"]).lower()
@@ -75,8 +106,9 @@ def display_prediction(
 
     if risk_level == "critical":
         st.error(
-            "Critical failure risk. Stop the machine safely "
-            "and arrange an immediate technical inspection."
+            "Critical failure risk. Stop the "
+            "machine safely and arrange an "
+            "immediate technical inspection."
         )
 
     elif risk_level == "high":
@@ -103,17 +135,23 @@ st.set_page_config(
 
 st.title("⚙️ MachineGuard AI")
 
-st.write("Predict industrial machine failure risk from live machine measurements.")
+st.write("Predict industrial machine-failure risk from live machine measurements.")
 
 readiness = get_api_readiness()
 
+prediction_enabled = False
+
 if readiness is None:
     st.error(
-        "The MachineGuard API is not available. Start FastAPI "
-        "before submitting a prediction."
+        "The MachineGuard API or production "
+        "model is unavailable. Start FastAPI, "
+        "MLflow and the registered champion "
+        "model before submitting a prediction."
     )
 
 elif readiness.get("status") == "ready":
+    prediction_enabled = True
+
     st.success(
         "Prediction service ready · "
         f"Model {readiness.get('model_name')} · "
@@ -137,7 +175,11 @@ with st.form(
     with left:
         machine_type = st.selectbox(
             label="Machine type",
-            options=["L", "M", "H"],
+            options=[
+                "L",
+                "M",
+                "H",
+            ],
             index=1,
             help=(
                 "L = low-quality machine, "
@@ -196,13 +238,11 @@ with st.form(
         label="Predict failure risk",
         type="primary",
         use_container_width=True,
-        disabled=readiness is None,
+        disabled=not prediction_enabled,
     )
 
 if submitted:
     request_payload = {
-        # The public API expects machine_type.
-        # prediction_service.py converts it internally to type.
         "machine_type": machine_type,
         "air_temperature": float(air_temperature),
         "process_temperature": float(process_temperature),
@@ -219,8 +259,9 @@ if submitted:
 
     except requests.Timeout:
         st.error(
-            "The prediction request timed out. Check whether "
-            "FastAPI and MLflow are running correctly."
+            "The prediction request timed out. "
+            "Check whether FastAPI and MLflow "
+            "are running correctly."
         )
 
     except requests.HTTPError as error:
@@ -239,3 +280,10 @@ if submitted:
 
     except requests.RequestException as error:
         st.error(f"Could not connect to the prediction API: {error}")
+
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as error:
+        st.error(f"The API returned an invalid prediction response: {error}")

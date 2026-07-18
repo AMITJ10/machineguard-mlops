@@ -1,9 +1,13 @@
+"""MachineGuard FastAPI application."""
+
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import AsyncIterator
+from pathlib import Path
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, status
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -26,6 +30,10 @@ from api.schemas import (
 
 logger = logging.getLogger(__name__)
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+DRIFT_SUMMARY_PATH = PROJECT_ROOT / "reports" / "drift" / "drift_summary.json"
+
 
 @asynccontextmanager
 async def lifespan(
@@ -43,9 +51,9 @@ async def lifespan(
             production_model.model_version,
             production_model.model_alias,
         )
+
     except Exception:
         logger.exception("The production model could not be loaded.")
-
         raise
 
     yield
@@ -125,6 +133,71 @@ def readiness() -> ReadinessResponse:
                 "message": ("The production model is not available."),
             },
         ) from error
+
+
+@app.get(
+    "/monitoring/drift",
+    response_model=dict[str, Any],
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": ("No drift report is available.")},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": ("The drift summary file is invalid.")
+        },
+    },
+    tags=["Monitoring"],
+)
+def get_drift_summary() -> dict[str, Any]:
+    """Return the latest generated drift summary."""
+    if not DRIFT_SUMMARY_PATH.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "drift_report_not_found",
+                "message": (
+                    "No drift report is available. Run monitoring/drift.py first."
+                ),
+            },
+        )
+
+    try:
+        summary = json.loads(
+            DRIFT_SUMMARY_PATH.read_text(
+                encoding="utf-8",
+            )
+        )
+
+    except json.JSONDecodeError as error:
+        logger.exception("The drift summary contains invalid JSON.")
+
+        raise HTTPException(
+            status_code=(status.HTTP_500_INTERNAL_SERVER_ERROR),
+            detail={
+                "error": "invalid_drift_summary",
+                "message": ("The drift summary file is invalid."),
+            },
+        ) from error
+
+    except OSError as error:
+        logger.exception("The drift summary could not be read.")
+
+        raise HTTPException(
+            status_code=(status.HTTP_500_INTERNAL_SERVER_ERROR),
+            detail={
+                "error": "drift_summary_read_failed",
+                "message": ("The drift summary could not be read."),
+            },
+        ) from error
+
+    if not isinstance(summary, dict):
+        raise HTTPException(
+            status_code=(status.HTTP_500_INTERNAL_SERVER_ERROR),
+            detail={
+                "error": "invalid_drift_summary",
+                "message": ("The drift summary must be a JSON object."),
+            },
+        )
+
+    return summary
 
 
 @app.post(
