@@ -1,0 +1,292 @@
+name: machineguard-airflow
+
+x-airflow-build: &airflow-build
+  context: .
+  dockerfile: Dockerfile.airflow
+
+x-airflow-common-environment: &airflow-common-environment
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+    postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+
+  AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__DEFAULT_TIMEZONE: UTC
+
+  AIRFLOW__CORE__AUTH_MANAGER: >-
+    airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: >-
+    admin:admin,viewer:viewer
+
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: >-
+    /opt/airflow/config/simple_auth_manager_passwords.json.generated
+
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: >-
+    http://airflow-api-server:8080/execution/
+
+  AIRFLOW__API__BASE_URL: >-
+    http://localhost:8080
+
+  AIRFLOW__API_AUTH__JWT_SECRET: >-
+    machineguard-airflow-development-jwt-secret-key-change-before-production-2026
+
+  AIRFLOW__API_AUTH__JWT_ISSUER: >-
+    machineguard-airflow
+
+  AIRFLOW__API_AUTH__JWT_AUDIENCE: >-
+    machineguard-airflow-api
+
+  AIRFLOW__API__SECRET_KEY: >-
+    machineguard-airflow-api-secret-key-change-before-production-2026
+
+  AIRFLOW__CORE__PARALLELISM: "4"
+  AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+
+  PYTHONPATH: /opt/airflow/machineguard
+
+  MLFLOW_TRACKING_URI: >-
+    file:///opt/airflow/machineguard/mlruns
+
+  PYTHONUNBUFFERED: "1"
+
+  # Object-storage configuration used inside Docker.
+  STORAGE_PROVIDER: minio
+  S3_BUCKET_NAME: machineguard-mlops-artifacts
+  S3_REGION: ap-south-1
+  S3_ENDPOINT_URL: http://minio:9000
+  AWS_ACCESS_KEY_ID: machineguard
+  AWS_SECRET_ACCESS_KEY: machineguard123
+  S3_USE_SSL: "false"
+  S3_VERIFY_SSL: "false"
+  S3_ADDRESSING_STYLE: path
+
+x-airflow-common-volumes: &airflow-common-volumes
+  - ./airflow/dags:/opt/airflow/dags
+  - ./airflow/logs:/opt/airflow/logs
+  - ./airflow/plugins:/opt/airflow/plugins
+  - ./airflow/config:/opt/airflow/config
+  - ./:/opt/airflow/machineguard
+
+services:
+  airflow-db:
+    image: postgres:16-alpine
+    container_name: machineguard-airflow-db
+
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U airflow -d airflow
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: machineguard-minio
+
+    command:
+      - server
+      - /data
+      - --console-address
+      - ":9001"
+
+    environment:
+      MINIO_ROOT_USER: machineguard
+      MINIO_ROOT_PASSWORD: machineguard123
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - minio_data:/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail http://localhost:9000/minio/health/live || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: machineguard-minio-init
+
+    depends_on:
+      minio:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+
+        echo "Configuring MinIO client..."
+        mc alias set local http://minio:9000 machineguard machineguard123
+
+        echo "Creating MachineGuard bucket..."
+        mc mb --ignore-existing local/machineguard-mlops-artifacts
+
+        echo "Setting bucket access to private..."
+        mc anonymous set private local/machineguard-mlops-artifacts
+
+        echo "MinIO bucket initialized successfully."
+
+    restart: "no"
+
+  airflow-init:
+    build: *airflow-build
+    container_name: machineguard-airflow-init
+
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+    environment:
+      <<: *airflow-common-environment
+
+    volumes: *airflow-common-volumes
+
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        echo "Running Airflow database migrations..."
+        airflow db migrate
+
+        echo "Airflow initialization completed."
+
+    restart: "no"
+
+  airflow-api-server:
+    build: *airflow-build
+    container_name: machineguard-airflow-api-server
+
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+    environment:
+      <<: *airflow-common-environment
+
+    volumes: *airflow-common-volumes
+
+    command: api-server
+
+    ports:
+      - "8080:8080"
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail http://localhost:8080/api/v2/monitor/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+
+    restart: unless-stopped
+
+  airflow-scheduler:
+    build: *airflow-build
+    container_name: machineguard-airflow-scheduler
+
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+
+    environment:
+      <<: *airflow-common-environment
+
+    volumes: *airflow-common-volumes
+
+    command: scheduler
+
+    restart: unless-stopped
+
+  airflow-dag-processor:
+    build: *airflow-build
+    container_name: machineguard-airflow-dag-processor
+
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+
+    environment:
+      <<: *airflow-common-environment
+
+    volumes: *airflow-common-volumes
+
+    command: dag-processor
+
+    restart: unless-stopped
+
+  airflow-triggerer:
+    build: *airflow-build
+    container_name: machineguard-airflow-triggerer
+
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
+
+    environment:
+      <<: *airflow-common-environment
+
+    volumes: *airflow-common-volumes
+
+    command: triggerer
+
+    restart: unless-stopped
+
+volumes:
+  airflow_postgres_data:
+
+  minio_data:
+    external: true
+    name: machineguard_minio_data
