@@ -75,8 +75,9 @@ logs/
 # Generated Artifacts
 ###############################################################################
 
-artifacts/
+artifacts/*
 !artifacts/.gitkeep
+!artifacts/machineguard_pipeline.joblib
 
 ###############################################################################
 # Generated Reports

@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: machineguard-api
+    runtime: docker
+
+    dockerfilePath: ./Dockerfile
+
+    plan: free
+
+    healthCheckPath: /health
+
+    autoDeploy: true
+
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: MODEL_NAME
+        value: MachineGuardFailureClassifier
+
+      - key: MODEL_ALIAS
+        value: champion
+
+      - key: STORAGE_PROVIDER
+        value: aws
+
+      - key: S3_BUCKET_NAME
+        sync: false
+
+      - key: S3_REGION
+        value: ap-south-1
+
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+      - key: MODEL_S3_KEY
+        value: models/champion/model.pkl
+
+      - key: PREPROCESSOR_S3_KEY
+        value: models/champion/preprocessor.pkl
