@@ -1,0 +1,23 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "machineguard"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "",
+  "title": "MachineGuard Dashboard",
+  "version": 1
+}

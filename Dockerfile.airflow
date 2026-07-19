@@ -20,9 +20,13 @@ COPY --chown=airflow:root requirements-airflow.txt \
 RUN pip install --no-cache-dir \
         "apache-airflow==${AIRFLOW_VERSION}" \
         -r /tmp/requirements-airflow.txt \
-        --constraint "${HOME}/constraints.txt" \
-    && pip check
+        --constraint "${HOME}/constraints.txt"
 
+RUN pip install --no-cache-dir \
+        "cryptography>=43.0.1,<46.0.0" \
+        "evidently==0.7.21" \
+    && pip check
+    
 WORKDIR /opt/airflow/machineguard
 
 ENV PYTHONPATH="/opt/airflow/machineguard"

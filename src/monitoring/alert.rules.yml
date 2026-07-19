@@ -1,0 +1,16 @@
+groups:
+  - name: machineguard
+
+    rules:
+
+      - alert: APIUnavailable
+
+        expr: up{job="machineguard-api"} == 0
+
+        for: 30s
+
+        labels:
+          severity: critical
+
+        annotations:
+          summary: MachineGuard API is down

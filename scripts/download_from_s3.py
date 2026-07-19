@@ -1,9 +1,8 @@
-"""Upload a local file to MachineGuard object storage."""
+"""Download a MachineGuard object from S3 or MinIO."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 from pathlib import Path
@@ -23,42 +22,30 @@ def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description=(
-            "Upload a local file to AWS S3 or MinIO."
+            "Download an object from MachineGuard storage."
         ),
-    )
-
-    parser.add_argument(
-        "--file",
-        required=True,
-        help="Path of the local file to upload.",
     )
 
     parser.add_argument(
         "--key",
         required=True,
         help=(
-            "Destination object key, for example "
-            "raw/machine_data.csv."
+            "Object key, for example "
+            "models/model.joblib."
         ),
     )
 
     parser.add_argument(
-        "--content-type",
-        default=None,
-        help="Optional MIME type override.",
-    )
-
-    parser.add_argument(
-        "--artifact-type",
-        default="general",
-        help="Artifact type stored as object metadata.",
+        "--output",
+        required=True,
+        help="Local destination path.",
     )
 
     return parser.parse_args()
 
 
 def main() -> int:
-    """Run the file upload."""
+    """Run the object download."""
     load_dotenv(PROJECT_ROOT / ".env")
 
     logging.basicConfig(
@@ -75,30 +62,18 @@ def main() -> int:
         settings = S3Settings.from_environment()
         storage_client = S3StorageClient(settings)
 
-        if not storage_client.bucket_exists():
-            storage_client.create_bucket()
-
-        result = storage_client.upload_file(
-            local_path=arguments.file,
+        downloaded_path = storage_client.download_file(
             object_key=arguments.key,
-            metadata={
-                "project": "machineguard",
-                "artifact-type": arguments.artifact_type,
-            },
-            content_type=arguments.content_type,
+            local_path=arguments.output,
         )
 
         print(
-            json.dumps(
-                result,
-                indent=2,
-                default=str,
-            ),
+            f"Downloaded successfully: {downloaded_path}",
         )
         return 0
 
     except Exception as error:
-        logging.exception("Upload failed: %s", error)
+        logging.exception("Download failed: %s", error)
         return 1
 
 

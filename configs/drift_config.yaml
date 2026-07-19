@@ -1,0 +1,63 @@
+drift:
+  # Dataset-level drift is detected when this share of monitored
+  # columns is classified as drifted.
+  #
+  # Example:
+  # 6 monitored columns and threshold 0.30 means at least
+  # 2 drifted columns will trigger dataset drift.
+  drift_share_threshold: 0.30
+
+  # Statistical significance level.
+  #
+  # For numerical columns:
+  # p-value <= 0.05 is required.
+  #
+  # For categorical columns:
+  # chi-square p-value <= 0.05 is required.
+  significance_level: 0.05
+
+  # Minimum KS statistic required for numerical drift.
+  #
+  # This prevents very small distribution differences from being
+  # classified as drift merely because the sample size is large.
+  numeric_effect_size_threshold: 0.10
+
+  # Minimum total variation distance required for categorical drift.
+  #
+  # 0.00 means identical categorical proportions.
+  # 1.00 means completely different categorical distributions.
+  categorical_effect_size_threshold: 0.10
+
+  # Optional Evidently method used only for the visual report.
+  #
+  # Keep null to allow Evidently to select its default method
+  # based on column type and dataset size.
+  method: null
+
+  # Columns excluded from feature-drift monitoring.
+  excluded_columns:
+    - machine_failure
+    - target
+    - prediction
+    - predicted_probability
+    - timestamp
+    - event_time
+
+  # Keep false for Airflow branching.
+  #
+  # When false:
+  # - drift task succeeds
+  # - branch task decides whether retraining should run
+  #
+  # When true:
+  # - the drift script exits with code 2 when drift is detected
+  # - downstream branching may not execute
+  fail_on_drift: false
+
+paths:
+  reference_data: data/reference/reference.csv
+  current_data: data/current/current.csv
+
+  drift_json_report: monitoring/reports/data_drift_report.json
+  drift_html_report: monitoring/reports/data_drift_report.html
+  drift_summary: monitoring/reports/data_drift_summary.json
