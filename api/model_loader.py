@@ -21,7 +21,7 @@ import mlflow
 import mlflow.pyfunc
 from mlflow import MlflowClient
 from mlflow.pyfunc import PyFuncModel
-
+from src.machineguard.cloud.s3 import download_model_from_s3
 from src.machineguard.config import load_config
 from src.machineguard.mlflow_utils import configure_mlflow
 
@@ -97,25 +97,13 @@ def load_production_model() -> LoadedProductionModel:
     # Production (Render / Docker)
     # ==========================================================
 
+    # ==========================================================
+# Production (Render / Docker)
+# ==========================================================
+
     if app_env == "production":
 
-        default_model_path = (
-            PROJECT_ROOT
-            / "artifacts"
-            / "machineguard_pipeline.joblib"
-        )
-
-        model_path = Path(
-            os.getenv(
-                "MODEL_PATH",
-                str(default_model_path),
-            )
-        )
-
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Production model not found: {model_path}"
-            )
+        model_path = download_model_from_s3()
 
         pipeline = joblib.load(model_path)
 
