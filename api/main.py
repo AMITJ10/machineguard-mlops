@@ -46,15 +46,15 @@ async def lifespan(
         production_model = load_production_model()
 
         logger.info(
-            "Loaded model %s version %s using alias %s.",
+            "Loaded model %s version %s",
             production_model.model_name,
             production_model.model_version,
-            production_model.model_alias,
         )
 
     except Exception:
-        logger.exception("The production model could not be loaded.")
-        raise
+        logger.exception("Could not load production model.")
+
+        # Don't crash FastAPI.
 
     yield
 

@@ -1,4 +1,4 @@
-"""MachineGuard Streamlit prediction application."""
+"""MachineGuard AI Dashboard."""
 
 from __future__ import annotations
 
@@ -8,9 +8,15 @@ from typing import Any
 import requests
 import streamlit as st
 
+st.set_page_config(
+    page_title="MachineGuard AI",
+    page_icon="⚙️",
+    layout="wide",
+)
+
 API_URL = os.getenv(
     "API_URL",
-    "http://127.0.0.1:8000",
+    "https://machineguard-mlops.onrender.com",
 ).rstrip("/")
 
 READINESS_TIMEOUT_SECONDS = 5
@@ -18,7 +24,8 @@ PREDICTION_TIMEOUT_SECONDS = 30
 
 
 def get_api_readiness() -> dict[str, Any] | None:
-    """Return API model-readiness information."""
+    """Return API readiness information."""
+
     try:
         response = requests.get(
             f"{API_URL}/ready",
@@ -44,20 +51,8 @@ def get_api_readiness() -> dict[str, Any] | None:
 def submit_prediction(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Send one machine record to the API.
+    """Send prediction request."""
 
-    Args:
-        payload: Validated machine measurements.
-
-    Returns:
-        Prediction API response.
-
-    Raises:
-        requests.HTTPError: If the API returns an
-            unsuccessful status.
-        requests.RequestException: If the request fails.
-        ValueError: If the API response is invalid.
-    """
     response = requests.post(
         f"{API_URL}/predict",
         json=payload,
@@ -69,7 +64,9 @@ def submit_prediction(
     result = response.json()
 
     if not isinstance(result, dict):
-        raise ValueError("Prediction API returned an invalid response.")
+        raise ValueError(
+            "Prediction API returned an invalid response."
+        )
 
     return result
 
@@ -77,172 +74,265 @@ def submit_prediction(
 def display_prediction(
     result: dict[str, Any],
 ) -> None:
-    """Display prediction results in Streamlit."""
-    probability = float(result["failure_probability"])
+    """Display prediction dashboard."""
 
-    risk_level = str(result["risk_level"]).lower()
+    probability = float(result["failure_probability"])
 
     prediction = int(result["prediction"])
 
-    left, middle, right = st.columns(3)
+    risk = str(result["risk_level"]).upper()
 
-    with left:
+    st.divider()
+
+    st.subheader("Prediction Result")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
         st.metric(
-            label="Failure probability",
-            value=f"{probability:.2%}",
+            "Failure Probability",
+            f"{probability:.2%}",
         )
 
-    with middle:
+    with c2:
         st.metric(
-            label="Predicted class",
-            value=("Failure" if prediction == 1 else "No failure"),
+            "Prediction",
+            "Failure"
+            if prediction
+            else "Healthy",
         )
 
-    with right:
+    with c3:
         st.metric(
-            label="Risk level",
-            value=risk_level.title(),
+            "Risk",
+            risk,
         )
 
-    if risk_level == "critical":
+    st.progress(probability)
+
+    if risk == "LOW":
+        st.success(
+            "Machine operating normally."
+        )
+
+    elif risk == "MEDIUM":
+        st.warning(
+            "Maintenance should be scheduled."
+        )
+
+    elif risk == "HIGH":
         st.error(
-            "Critical failure risk. Stop the "
-            "machine safely and arrange an "
-            "immediate technical inspection."
+            "High probability of failure."
         )
-
-    elif risk_level == "high":
-        st.error("High failure risk. Immediate inspection is recommended.")
-
-    elif risk_level == "medium":
-        st.warning("Medium failure risk. Schedule a maintenance inspection soon.")
 
     else:
-        st.success("Low failure risk under the current readings.")
+        st.error(
+            "Critical risk detected."
+        )
 
     with st.expander(
-        "Prediction details",
+        "Raw API Response",
         expanded=False,
     ):
         st.json(result)
 
 
-st.set_page_config(
-    page_title="MachineGuard AI",
-    page_icon="⚙️",
-    layout="wide",
-)
+# ==========================================================
+# Sidebar
+# ==========================================================
+
+with st.sidebar:
+
+    st.title("⚙️ MachineGuard")
+
+    st.markdown(
+        """
+Industrial Predictive Maintenance Platform
+
+---
+
+### Tech Stack
+
+- FastAPI
+- Scikit-Learn
+- MLflow
+- Docker
+- Streamlit
+- Render
+- AWS (Next Phase)
+
+---
+"""
+    )
+
+    st.link_button(
+        "API Docs",
+        f"{API_URL}/docs",
+    )
+
+    st.link_button(
+        "Health Check",
+        f"{API_URL}/health",
+    )
+
+    st.link_button(
+        "GitHub Repository",
+        "https://github.com/AMITJ10/machineguard-mlops",
+    )
+
+
+# ==========================================================
+# Header
+# ==========================================================
 
 st.title("⚙️ MachineGuard AI")
 
-st.write("Predict industrial machine-failure risk from live machine measurements.")
+st.caption(
+    "Industrial Machine Failure Prediction Platform"
+)
+
+
+# ==========================================================
+# API Status
+# ==========================================================
 
 readiness = get_api_readiness()
 
 prediction_enabled = False
 
 if readiness is None:
-    st.error(
-        "The MachineGuard API or production "
-        "model is unavailable. Start FastAPI, "
-        "MLflow and the registered champion "
-        "model before submitting a prediction."
-    )
+
+    st.error("🔴 Backend Offline")
 
 elif readiness.get("status") == "ready":
+
     prediction_enabled = True
 
     st.success(
-        "Prediction service ready · "
-        f"Model {readiness.get('model_name')} · "
-        f"Version {readiness.get('model_version')} · "
-        f"Alias {readiness.get('model_alias')}"
+        f"""
+🟢 API Online
+
+Model:
+{readiness.get('model_name')}
+
+Version:
+{readiness.get('model_version')}
+"""
     )
 
 else:
-    st.warning("The API is running, but the production model is not ready.")
+
+    st.warning("🟡 Backend Running")
 
 st.divider()
+
+
+# ==========================================================
+# Example Data
+# ==========================================================
+
+if st.button("Load Example Data"):
+
+    st.session_state["air"] = 298.1
+    st.session_state["process"] = 308.6
+    st.session_state["speed"] = 1551.0
+    st.session_state["torque"] = 42.8
+    st.session_state["wear"] = 0.0
+
+
+# ==========================================================
+# Prediction Form
+# ==========================================================
 
 with st.form(
     key="prediction_form",
     clear_on_submit=False,
 ):
-    st.subheader("Machine measurements")
+
+    st.subheader("Machine Measurements")
 
     left, right = st.columns(2)
 
     with left:
+
         machine_type = st.selectbox(
-            label="Machine type",
-            options=[
-                "L",
-                "M",
-                "H",
-            ],
+            "Machine Type",
+            ["L", "M", "H"],
             index=1,
-            help=(
-                "L = low-quality machine, "
-                "M = medium-quality machine, "
-                "H = high-quality machine."
-            ),
         )
 
         air_temperature = st.number_input(
-            label="Air temperature (K)",
+            "Air Temperature (K)",
             min_value=250.0,
             max_value=400.0,
-            value=298.1,
+            value=st.session_state.get(
+                "air",
+                298.1,
+            ),
             step=0.1,
-            format="%.1f",
         )
 
         process_temperature = st.number_input(
-            label="Process temperature (K)",
+            "Process Temperature (K)",
             min_value=250.0,
             max_value=450.0,
-            value=308.6,
+            value=st.session_state.get(
+                "process",
+                308.6,
+            ),
             step=0.1,
-            format="%.1f",
         )
 
     with right:
+
         rotational_speed = st.number_input(
-            label="Rotational speed (RPM)",
+            "Rotational Speed (RPM)",
             min_value=0.0,
             max_value=5000.0,
-            value=1551.0,
+            value=st.session_state.get(
+                "speed",
+                1551.0,
+            ),
             step=1.0,
-            format="%.1f",
         )
 
         torque = st.number_input(
-            label="Torque (Nm)",
+            "Torque (Nm)",
             min_value=0.0,
             max_value=200.0,
-            value=42.8,
+            value=st.session_state.get(
+                "torque",
+                42.8,
+            ),
             step=0.1,
-            format="%.1f",
         )
 
         tool_wear = st.number_input(
-            label="Tool wear (minutes)",
+            "Tool Wear (minutes)",
             min_value=0.0,
             max_value=500.0,
-            value=0.0,
+            value=st.session_state.get(
+                "wear",
+                0.0,
+            ),
             step=1.0,
-            format="%.1f",
         )
 
     submitted = st.form_submit_button(
-        label="Predict failure risk",
+        "Predict Failure Risk",
         type="primary",
         use_container_width=True,
         disabled=not prediction_enabled,
     )
 
+
+# ==========================================================
+# Prediction
+# ==========================================================
+
 if submitted:
-    request_payload = {
+
+    payload = {
         "machine_type": machine_type,
         "air_temperature": float(air_temperature),
         "process_temperature": float(process_temperature),
@@ -252,25 +342,30 @@ if submitted:
     }
 
     try:
-        with st.spinner("Calculating failure risk..."):
-            prediction_result = submit_prediction(request_payload)
 
-        display_prediction(prediction_result)
+        with st.spinner(
+            "Calculating failure risk..."
+        ):
+            result = submit_prediction(payload)
+
+        display_prediction(result)
 
     except requests.Timeout:
+
         st.error(
-            "The prediction request timed out. "
-            "Check whether FastAPI and MLflow "
-            "are running correctly."
+            "Prediction request timed out."
         )
 
     except requests.HTTPError as error:
+
         response_text = ""
 
         if error.response is not None:
             response_text = error.response.text
 
-        st.error("The API rejected the prediction request.")
+        st.error(
+            "The API rejected the request."
+        )
 
         if response_text:
             st.code(
@@ -279,11 +374,28 @@ if submitted:
             )
 
     except requests.RequestException as error:
-        st.error(f"Could not connect to the prediction API: {error}")
+
+        st.error(
+            f"Could not connect to the API:\n{error}"
+        )
 
     except (
         KeyError,
         TypeError,
         ValueError,
     ) as error:
-        st.error(f"The API returned an invalid prediction response: {error}")
+
+        st.error(
+            f"Invalid API response:\n{error}"
+        )
+
+
+# ==========================================================
+# Footer
+# ==========================================================
+
+st.divider()
+
+st.caption(
+    "MachineGuard AI • End-to-End MLOps Project • Built with FastAPI, MLflow, Docker, Streamlit and Render"
+)

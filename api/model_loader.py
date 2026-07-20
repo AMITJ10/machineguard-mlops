@@ -2,10 +2,10 @@
 Load the production model.
 
 Development:
-    MLflow Model Registry
+    - MLflow Model Registry
 
 Production:
-    Exported Joblib pipeline
+    - Bundled Joblib pipeline
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
 import joblib
 import mlflow
@@ -23,12 +25,12 @@ from mlflow.pyfunc import PyFuncModel
 from src.machineguard.config import load_config
 from src.machineguard.mlflow_utils import configure_mlflow
 
-
-APP_ENV = os.getenv("APP_ENV", "development")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
 class LoadedProductionModel:
+    """Loaded production model and its metadata."""
 
     model: object
     model_name: str
@@ -40,27 +42,32 @@ class LoadedProductionModel:
     registry_uri: str
 
 
-def _get_registry_settings():
+def _get_registry_settings() -> tuple[str, str, str, str]:
+    """Read MLflow registry configuration."""
 
-    config = load_config()
+    config: dict[str, Any] = load_config()
 
-    default_tracking_uri = config["mlflow"]["tracking_uri"]
+    default_tracking_uri = str(config["mlflow"]["tracking_uri"])
 
-    default_registry_uri = config["mlflow"].get(
-        "registry_uri",
-        default_tracking_uri,
+    default_registry_uri = str(
+        config["mlflow"].get(
+            "registry_uri",
+            default_tracking_uri,
+        )
     )
 
     model_name = os.getenv(
         "MODEL_NAME",
-        config["registry"]["model_name"],
+        str(config["registry"]["model_name"]),
     )
 
     model_alias = os.getenv(
         "MODEL_ALIAS",
-        config["registry"].get(
-            "champion_alias",
-            "champion",
+        str(
+            config["registry"].get(
+                "champion_alias",
+                "champion",
+            )
         ),
     )
 
@@ -73,35 +80,59 @@ def _get_registry_settings():
 
 
 @lru_cache(maxsize=1)
-def load_production_model():
+def load_production_model() -> LoadedProductionModel:
+    """
+    Load the production model.
 
-    # --------------------------------------------------
-    # Production (Render)
-    # --------------------------------------------------
+    Development:
+        Loads the Champion model from the MLflow Model Registry.
 
-    if APP_ENV == "production":
+    Production:
+        Loads the bundled Joblib model packaged inside the Docker image.
+    """
 
-        model_path = os.getenv(
-            "MODEL_PATH",
-            "artifacts/machineguard_pipeline.joblib",
+    app_env = os.getenv("APP_ENV", "development").lower()
+
+    # ==========================================================
+    # Production (Render / Docker)
+    # ==========================================================
+
+    if app_env == "production":
+
+        default_model_path = (
+            PROJECT_ROOT
+            / "artifacts"
+            / "machineguard_pipeline.joblib"
         )
+
+        model_path = Path(
+            os.getenv(
+                "MODEL_PATH",
+                str(default_model_path),
+            )
+        )
+
+        if not model_path.exists():
+            raise FileNotFoundError(
+                f"Production model not found: {model_path}"
+            )
 
         pipeline = joblib.load(model_path)
 
         return LoadedProductionModel(
             model=pipeline,
             model_name="MachineGuardFailureClassifier",
-            model_alias="production",
+            model_alias="champion",
             model_version="joblib",
-            model_uri=model_path,
+            model_uri=str(model_path),
             run_id="N/A",
             tracking_uri="N/A",
             registry_uri="N/A",
         )
 
-    # --------------------------------------------------
-    # Local Development (MLflow)
-    # --------------------------------------------------
+    # ==========================================================
+    # Development (MLflow Registry)
+    # ==========================================================
 
     (
         default_tracking_uri,
@@ -127,33 +158,35 @@ def load_production_model():
         registry_uri=registry_uri,
     )
 
-    version = client.get_model_version_by_alias(
+    model_version = client.get_model_version_by_alias(
         name=model_name,
         alias=model_alias,
     )
 
     model_uri = f"models:/{model_name}@{model_alias}"
 
-    model = mlflow.pyfunc.load_model(model_uri)
+    model: PyFuncModel = mlflow.pyfunc.load_model(model_uri)
 
     return LoadedProductionModel(
         model=model,
         model_name=model_name,
         model_alias=model_alias,
-        model_version=str(version.version),
+        model_version=str(model_version.version),
         model_uri=model_uri,
-        run_id=str(version.run_id),
+        run_id=str(model_version.run_id),
         tracking_uri=tracking_uri,
         registry_uri=registry_uri,
     )
 
 
-def clear_model_cache():
+def clear_model_cache() -> None:
+    """Clear the cached model."""
 
     load_production_model.cache_clear()
 
 
-def reload_production_model():
+def reload_production_model() -> LoadedProductionModel:
+    """Reload the production model."""
 
     clear_model_cache()
 
