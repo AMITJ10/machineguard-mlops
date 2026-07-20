@@ -23,15 +23,6 @@ LOCAL_MODEL_PATH = (
 
 
 def download_model_from_s3() -> Path:
-    """
-    Download production model from S3.
-
-    Returns
-    -------
-    Path
-        Local model path.
-    """
-
     if LOCAL_MODEL_PATH.exists():
         return LOCAL_MODEL_PATH
 
@@ -47,7 +38,11 @@ def download_model_from_s3() -> Path:
     s3 = boto3.client(
         "s3",
         region_name=region,
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
     )
+
+    print(f"Downloading model from S3: s3://{bucket}/{key}")
 
     try:
         s3.download_file(
@@ -60,5 +55,7 @@ def download_model_from_s3() -> Path:
         raise RuntimeError(
             "Failed to download model from S3."
         ) from exc
+
+    print(f"Model downloaded to {LOCAL_MODEL_PATH}")
 
     return LOCAL_MODEL_PATH
