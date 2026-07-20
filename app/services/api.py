@@ -1,8 +1,4 @@
-"""
-MachineGuard API client.
-
-All communication with the FastAPI backend is centralized here.
-"""
+"""Shared API client for MachineGuard."""
 
 from __future__ import annotations
 
@@ -21,178 +17,80 @@ TIMEOUT = 30
 
 
 class APIError(Exception):
-    """Raised when the backend API returns an error."""
+    """Raised when the API request fails."""
 
 
-# --------------------------------------------------------------------
-# Internal Helper
-# --------------------------------------------------------------------
+def get_health() -> dict[str, Any]:
+    """Health endpoint."""
 
-
-def _request(
-    method: str,
-    endpoint: str,
-    **kwargs: Any,
-) -> Any:
-    """
-    Send a request to the backend.
-
-    Raises:
-        APIError
-    """
-
-    url = f"{API_URL}{endpoint}"
-
-    try:
-        response = requests.request(
-            method=method,
-            url=url,
-            timeout=TIMEOUT,
-            **kwargs,
-        )
-
-    except requests.RequestException as error:
-        raise APIError(
-            f"Could not connect to backend.\n\n{error}"
-        ) from error
-
-    if not response.ok:
-        try:
-            detail = response.json()
-        except Exception:
-            detail = response.text
-
-        raise APIError(str(detail))
-
-    try:
-        return response.json()
-
-    except Exception as error:
-        raise APIError(
-            "Backend returned an invalid response."
-        ) from error
-
-
-# --------------------------------------------------------------------
-# Health
-# --------------------------------------------------------------------
-
-
-def root() -> dict:
-    return _request("GET", "/")
-
-
-def health() -> dict:
-    return _request("GET", "/health")
-
-
-def ready() -> dict:
-    return _request("GET", "/ready")
-
-
-# --------------------------------------------------------------------
-# Prediction
-# --------------------------------------------------------------------
-
-
-def predict(
-    payload: dict[str, Any],
-) -> dict:
-    """
-    Single prediction.
-    """
-
-    return _request(
-        "POST",
-        "/predict",
-        json=payload,
+    response = requests.get(
+        f"{API_URL}/health",
+        timeout=5,
     )
 
+    response.raise_for_status()
 
-def predict_batch(
-    dataframe: pd.DataFrame,
-) -> dict:
-    """
-    Batch prediction.
+    return response.json()
 
-    Converts dataframe into the backend schema.
-    """
 
-    payload = {
-        "machines": dataframe.to_dict(
-            orient="records",
-        )
-    }
+def get_ready() -> dict[str, Any]:
+    """Ready endpoint."""
 
-    return _request(
-        "POST",
-        "/predict/batch",
-        json=payload,
+    response = requests.get(
+        f"{API_URL}/ready",
+        timeout=5,
     )
 
+    response.raise_for_status()
 
-# --------------------------------------------------------------------
-# Monitoring
-# --------------------------------------------------------------------
-
-
-def drift() -> dict:
-    return _request(
-        "GET",
-        "/monitoring/drift",
-    )
+    return response.json()
 
 
-# --------------------------------------------------------------------
-# Metrics
-# --------------------------------------------------------------------
-
-
-def metrics() -> str:
-    """
-    Prometheus metrics.
-    """
-
-    url = f"{API_URL}/metrics"
+def predict(payload: dict[str, Any]) -> dict[str, Any]:
+    """Single prediction."""
 
     try:
-        response = requests.get(
-            url,
+
+        response = requests.post(
+            f"{API_URL}/predict",
+            json=payload,
             timeout=TIMEOUT,
         )
 
         response.raise_for_status()
 
-        return response.text
+        return response.json()
 
-    except requests.RequestException as error:
-        raise APIError(str(error)) from error
-
-
-# --------------------------------------------------------------------
-# API Status
-# --------------------------------------------------------------------
+    except requests.RequestException as exc:
+        raise APIError(str(exc)) from exc
 
 
-def api_status() -> dict:
+def predict_batch(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
     """
-    Returns backend status.
+    Simple batch prediction.
+
+    Loops through every row and
+    calls the prediction endpoint.
     """
 
-    try:
+    results = []
 
-        health_response = health()
+    for _, row in dataframe.iterrows():
 
-        ready_response = ready()
+        payload = row.to_dict()
 
-        return {
-            "online": True,
-            "health": health_response,
-            "ready": ready_response,
-        }
+        prediction = predict(payload)
 
-    except APIError:
+        payload["prediction"] = prediction["prediction"]
+        payload["failure_probability"] = prediction[
+            "failure_probability"
+        ]
+        payload["risk_level"] = prediction[
+            "risk_level"
+        ]
 
-        return {
-            "online": False,
-        }
+        results.append(payload)
+
+    return pd.DataFrame(results)

@@ -8,6 +8,12 @@ from datetime import datetime
 import requests
 import streamlit as st
 
+st.set_page_config(
+    page_title="API Status",
+    page_icon="🛰️",
+    layout="wide",
+)
+
 API_URL = os.getenv(
     "API_URL",
     "https://machineguard-mlops.onrender.com",
@@ -15,33 +21,23 @@ API_URL = os.getenv(
 
 TIMEOUT = 10
 
-st.set_page_config(
-    page_title="API Status",
-    page_icon="🛰️",
-    layout="wide",
-)
-
-st.title("🛰️ MachineGuard API Status")
-
-st.caption("Monitor the health of the deployed FastAPI backend.")
-
-if st.button("🔄 Refresh Status", use_container_width=True):
-    st.rerun()
-
 
 def check_endpoint(endpoint: str):
-    """Call an API endpoint safely."""
+    """Safely call an API endpoint."""
+
     try:
         response = requests.get(
             f"{API_URL}{endpoint}",
             timeout=TIMEOUT,
         )
 
+        response.raise_for_status()
+
         return {
             "success": True,
             "status_code": response.status_code,
-            "data": response.json(),
             "response_time": response.elapsed.total_seconds(),
+            "data": response.json(),
         }
 
     except Exception as error:
@@ -51,96 +47,265 @@ def check_endpoint(endpoint: str):
         }
 
 
+st.title("🛰️ API Status")
+
+st.caption(
+    "Real-time health monitoring for the deployed MachineGuard API."
+)
+
+if st.button(
+    "🔄 Refresh",
+    use_container_width=True,
+):
+    st.rerun()
+
 health = check_endpoint("/health")
 ready = check_endpoint("/ready")
 
-left, right = st.columns(2)
+st.divider()
 
-with left:
-    st.subheader("❤️ Health")
+# ---------------------------------------------------------
+# Overall Status
+# ---------------------------------------------------------
+
+status1, status2, status3 = st.columns(3)
+
+with status1:
 
     if health["success"]:
-        st.success("Healthy")
+        st.success("Backend Online")
+    else:
+        st.error("Backend Offline")
+
+with status2:
+
+    if ready["success"]:
+        st.success("Prediction Service Ready")
+    else:
+        st.warning("Prediction Service Unavailable")
+
+with status3:
+
+    if health["success"]:
+        st.metric(
+            "Response Time",
+            f"{health['response_time']:.3f}s",
+        )
+    else:
+        st.metric(
+            "Response Time",
+            "-",
+        )
+
+st.divider()
+
+# ---------------------------------------------------------
+# Health Endpoint
+# ---------------------------------------------------------
+
+st.subheader("❤️ Health Endpoint")
+
+if health["success"]:
+
+    c1, c2 = st.columns(2)
+
+    with c1:
 
         st.metric(
             "HTTP Status",
             health["status_code"],
         )
 
+    with c2:
+
         st.metric(
-            "Response Time",
+            "Latency",
             f"{health['response_time']:.3f} sec",
         )
 
-        st.json(health["data"])
+    st.success("Backend is healthy.")
 
-    else:
-        st.error("Unavailable")
-        st.code(health["error"])
+    st.json(health["data"])
 
+else:
 
-with right:
-    st.subheader("🚀 Readiness")
+    st.error("Unable to connect.")
 
-    if ready["success"]:
-        st.success("Ready")
+    st.code(health["error"])
 
-        data = ready["data"]
+st.divider()
 
-        st.metric(
-            "Model Version",
-            data.get("model_version", "-"),
-        )
+# ---------------------------------------------------------
+# Ready Endpoint
+# ---------------------------------------------------------
 
-        st.metric(
-            "Model Alias",
-            data.get("model_alias", "-"),
-        )
+st.subheader("🚀 Model Readiness")
+
+if ready["success"]:
+
+    data = ready["data"]
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
 
         st.metric(
             "Model Name",
-            data.get("model_name", "-"),
+            data.get(
+                "model_name",
+                "-",
+            ),
         )
 
-        st.json(data)
+    with col2:
 
-    else:
-        st.error("Model Not Ready")
-        st.code(ready["error"])
+        st.metric(
+            "Version",
+            data.get(
+                "model_version",
+                "-",
+            ),
+        )
 
+    with col3:
+
+        st.metric(
+            "Alias",
+            data.get(
+                "model_alias",
+                "-",
+            ),
+        )
+
+    st.success("Champion model loaded successfully.")
+
+    st.json(data)
+
+else:
+
+    st.warning("Model not ready.")
+
+    st.code(ready["error"])
 
 st.divider()
 
-st.subheader("📡 API Information")
+# ---------------------------------------------------------
+# API Endpoints
+# ---------------------------------------------------------
 
-st.code(API_URL)
+st.subheader("Available Endpoints")
 
-st.markdown(
-    f"""
-**Swagger Docs**
+endpoint_data = {
+    "Endpoint": [
+        "/health",
+        "/ready",
+        "/predict",
+        "/docs",
+        "/openapi.json",
+        "/metrics",
+    ],
+    "Purpose": [
+        "Health Check",
+        "Model Readiness",
+        "Single Prediction",
+        "Swagger UI",
+        "OpenAPI Schema",
+        "Prometheus Metrics",
+    ],
+}
 
-{API_URL}/docs
+st.table(endpoint_data)
 
-**OpenAPI**
+st.divider()
 
-{API_URL}/openapi.json
+# ---------------------------------------------------------
+# Deployment Information
+# ---------------------------------------------------------
 
-**Metrics**
+st.subheader("Deployment")
 
-{API_URL}/metrics
+left, right = st.columns(2)
 
-**Health**
+with left:
 
-{API_URL}/health
+    st.info(
+        f"""
+**Backend URL**
 
-**Ready**
+{API_URL}
 
-{API_URL}/ready
+**Environment**
+
+Production
+
+**Hosting**
+
+Render
 """
+    )
+
+with right:
+
+    st.info(
+        """
+**Frontend**
+
+Streamlit Cloud
+
+**Container**
+
+Docker
+
+**Framework**
+
+FastAPI
+"""
+    )
+
+st.divider()
+
+# ---------------------------------------------------------
+# Quick Links
+# ---------------------------------------------------------
+
+st.subheader("Quick Links")
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+
+    st.link_button(
+        "📄 Swagger Docs",
+        f"{API_URL}/docs",
+        use_container_width=True,
+    )
+
+with c2:
+
+    st.link_button(
+        "🌐 Backend API",
+        API_URL,
+        use_container_width=True,
+    )
+
+with c3:
+
+    st.link_button(
+        "💻 GitHub",
+        "https://github.com/AMITJ10/machineguard-mlops",
+        use_container_width=True,
+    )
+
+st.divider()
+
+# ---------------------------------------------------------
+# Last Checked
+# ---------------------------------------------------------
+
+st.caption(
+    f"Last checked: {datetime.now().strftime('%d %b %Y %H:%M:%S')}"
 )
 
-st.divider()
-
-st.subheader("⏱ Last Checked")
-
-st.info(datetime.now().strftime("%d %b %Y %H:%M:%S"))
+st.caption(
+    "MachineGuard AI • Production API Monitoring"
+)

@@ -1,6 +1,4 @@
-"""
-MachineGuard Streamlit styling.
-"""
+"""Reusable Streamlit UI components."""
 
 from __future__ import annotations
 
@@ -8,9 +6,7 @@ import streamlit as st
 
 
 def load_css() -> None:
-    """
-    Inject custom CSS.
-    """
+    """Load custom styles."""
 
     st.markdown(
         """
@@ -21,110 +17,15 @@ def load_css() -> None:
     padding-bottom:2rem;
 }
 
-/* Sidebar */
+.metric-card{
 
-section[data-testid="stSidebar"]{
+    border-radius:12px;
+
+    padding:15px;
+
     background:#fafafa;
-}
 
-/* Metric Cards */
-
-div[data-testid="metric-container"]{
-
-    background:white;
-
-    border-radius:14px;
-
-    border:1px solid #e9ecef;
-
-    padding:18px;
-
-    box-shadow:0 2px 8px rgba(0,0,0,.08);
-}
-
-/* Buttons */
-
-.stButton>button{
-
-    width:100%;
-
-    border-radius:10px;
-
-    height:48px;
-
-    font-weight:600;
-
-}
-
-/* Success */
-
-.success-card{
-
-    background:#ecfdf5;
-
-    border-left:6px solid #16a34a;
-
-    padding:18px;
-
-    border-radius:10px;
-
-}
-
-/* Error */
-
-.error-card{
-
-    background:#fff5f5;
-
-    border-left:6px solid #dc2626;
-
-    padding:18px;
-
-    border-radius:10px;
-
-}
-
-/* Warning */
-
-.warning-card{
-
-    background:#fff8e6;
-
-    border-left:6px solid orange;
-
-    padding:18px;
-
-    border-radius:10px;
-
-}
-
-/* Info */
-
-.info-card{
-
-    background:#eef6ff;
-
-    border-left:6px solid #2563eb;
-
-    padding:18px;
-
-    border-radius:10px;
-
-}
-
-.big-title{
-
-    font-size:42px;
-
-    font-weight:700;
-
-}
-
-.subtitle{
-
-    color:#6c757d;
-
-    margin-bottom:25px;
+    border:1px solid #eeeeee;
 
 }
 
@@ -134,103 +35,82 @@ div[data-testid="metric-container"]{
     )
 
 
-# ----------------------------------------------------------
-# Cards
-# ----------------------------------------------------------
+def probability_bar(
+    probability: float,
+) -> None:
+    """Display probability gauge."""
 
+    st.progress(probability)
 
-def success_card(message: str):
-
-    st.markdown(
-        f"""
-<div class="success-card">
-
-{message}
-
-</div>
-""",
-        unsafe_allow_html=True,
+    st.caption(
+        f"Failure Probability : {probability:.2%}"
     )
 
 
-def error_card(message: str):
-
-    st.markdown(
-        f"""
-<div class="error-card">
-
-{message}
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-def warning_card(message: str):
-
-    st.markdown(
-        f"""
-<div class="warning-card">
-
-{message}
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-def info_card(message: str):
-
-    st.markdown(
-        f"""
-<div class="info-card">
-
-{message}
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-# ----------------------------------------------------------
-# Risk Colors
-# ----------------------------------------------------------
-
-
-def risk_badge(
+def risk_color(
     risk: str,
-):
-    """
-    Colored badge for prediction risk.
-    """
+) -> None:
+    """Risk message."""
 
     risk = risk.lower()
 
     if risk == "low":
-        st.success("🟢 LOW RISK")
+
+        st.success(
+            "✅ Low Risk"
+        )
 
     elif risk == "medium":
-        st.warning("🟡 MEDIUM RISK")
+
+        st.warning(
+            "🟡 Medium Risk"
+        )
 
     elif risk == "high":
-        st.error("🟠 HIGH RISK")
+
+        st.error(
+            "🟠 High Risk"
+        )
 
     else:
-        st.error("🔴 CRITICAL RISK")
+
+        st.error(
+            "🔴 Critical Risk"
+        )
 
 
-def probability_bar(
+def render_prediction_card(
+    prediction: int,
     probability: float,
-):
-    """
-    Prediction probability bar.
-    """
+    risk: str,
+) -> None:
+    """Prediction dashboard."""
 
-    st.progress(float(probability))
+    c1, c2, c3 = st.columns(3)
 
-    st.caption(
-        f"Failure Probability: {probability:.2%}"
-    )
+    with c1:
+
+        st.metric(
+            "Prediction",
+            "Failure"
+            if prediction == 1
+            else "Healthy",
+        )
+
+    with c2:
+
+        st.metric(
+            "Probability",
+            f"{probability:.2%}",
+        )
+
+    with c3:
+
+        st.metric(
+            "Risk",
+            risk.upper(),
+        )
+
+    probability_bar(probability)
+
+    risk_color(risk)
