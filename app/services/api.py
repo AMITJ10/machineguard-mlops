@@ -65,17 +65,28 @@ def predict(payload: dict[str, Any]) -> dict[str, Any]:
         raise APIError(str(exc)) from exc
 
 
-def predict_batch(
-    dataframe: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Simple batch prediction.
-
-    Loops through every row and
-    calls the prediction endpoint.
-    """
+def batch_predict(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Batch prediction."""
 
     results = []
+
+    for record in records:
+
+        prediction = predict(record)
+
+        record["prediction"] = prediction["prediction"]
+        record["failure_probability"] = prediction[
+            "failure_probability"
+        ]
+        record["risk_level"] = prediction[
+            "risk_level"
+        ]
+
+        results.append(record)
+
+    return results
 
     for _, row in dataframe.iterrows():
 
