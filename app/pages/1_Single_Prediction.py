@@ -32,52 +32,74 @@ with st.form("prediction_form"):
 
     left, right = st.columns(2)
 
+    machine_type_labels = {
+        "L": "L — Low grade (economy build, lower stress tolerance)",
+        "M": "M — Medium grade (standard build)",
+        "H": "H — High grade (heavy-duty, higher stress tolerance)",
+    }
+    machine_type_options = list(machine_type_labels.keys())
+
     with left:
 
         machine_type = st.selectbox(
             "Machine Type",
-            ["L", "M", "H"],
-            index=["L", "M", "H"].index(
+            machine_type_options,
+            index=machine_type_options.index(
                 st.session_state.get("machine_type", "M")
             ),
-            help="L = low quality, M = medium quality, H = high quality.",
+            format_func=lambda code: machine_type_labels[code],
+            help=(
+                "Manufacturing quality grade of the machine. Lower grades "
+                "have lower tolerance to combined wear and torque stress "
+                "(see Overstrain checks below)."
+            ),
         )
 
         air_temperature = st.number_input(
             "Air Temperature (K)",
+            min_value=250.0,
+            max_value=400.0,
             value=st.session_state.get("air", 298.1),
             step=0.1,
-            help="Typical training range is roughly 295-305 K.",
+            help="Valid range: 250-400 K. Typical operating range: 295-305 K.",
         )
 
         process_temperature = st.number_input(
             "Process Temperature (K)",
+            min_value=250.0,
+            max_value=450.0,
             value=st.session_state.get("process", 308.6),
             step=0.1,
-            help="Typical training range is roughly 305-314 K.",
+            help="Valid range: 250-450 K. Typical operating range: 305-315 K.",
         )
 
     with right:
 
         rotational_speed = st.number_input(
             "Rotational Speed (RPM)",
+            min_value=0.0,
+            max_value=5000.0,
             value=st.session_state.get("speed", 1551.0),
             step=1.0,
-            help="Typical training range is roughly 1170-2900 RPM.",
+            help="Valid range: 0-5000 RPM. Typical operating range: 1150-2900 RPM.",
         )
 
         torque = st.number_input(
             "Torque (Nm)",
+            min_value=0.0,
+            max_value=200.0,
             value=st.session_state.get("torque", 42.8),
             step=0.1,
-            help="Typical training range is roughly 3-77 Nm.",
+            help="Valid range: 0-200 Nm. Typical operating range: 3-77 Nm.",
         )
 
         tool_wear = st.number_input(
             "Tool Wear (minutes)",
+            min_value=0.0,
+            max_value=500.0,
             value=st.session_state.get("wear", 0.0),
             step=1.0,
-            help="Typical training range is roughly 0-250 minutes.",
+            help="Valid range: 0-500 minutes. Typical operating range: 0-250 minutes.",
         )
 
     submitted = st.form_submit_button(
@@ -282,6 +304,3 @@ if submitted:
                 with st.expander(f"{icon} {finding['factor']}", expanded=True):
                     st.write(finding["detail"])
                     st.markdown(f"**Recommended action:** {finding['action']}")
-
-        with st.expander("API Response"):
-            st.json(result)
