@@ -347,36 +347,36 @@ st.divider()
 # ROADMAP
 # ----------------------------------------------------
 
-st.subheader("Upcoming Production Features")
+# st.subheader("Upcoming Production Features")
 
-roadmap = pd.DataFrame(
-    {
-        "Feature": [
-            "AWS S3 Model Registry",
-            "Grafana Dashboard",
-            "Prometheus Monitoring",
-            "Airflow Retraining",
-            "Drift Detection",
-            "Alerting",
-        ],
-        "Status": [
-            "Next Phase",
-            "Planned",
-            "Planned",
-            "Planned",
-            "Completed",
-            "Planned",
-        ],
-    }
-)
+# roadmap = pd.DataFrame(
+#     {
+#         "Feature": [
+#             "AWS S3 Model Registry",
+#             "Grafana Dashboard",
+#             "Prometheus Monitoring",
+#             "Airflow Retraining",
+#             "Drift Detection",
+#             "Alerting",
+#         ],
+#         "Status": [
+#             "Next Phase",
+#             "Planned",
+#             "Planned",
+#             "Planned",
+#             "Completed",
+#             "Planned",
+#         ],
+#     }
+# )
 
-st.dataframe(
-    roadmap,
-    use_container_width=True,
-    hide_index=True,
-)
+# st.dataframe(
+#     roadmap,
+#     use_container_width=True,
+#     hide_index=True,
+# )
 
-st.divider()
+# st.divider()
 
 # ----------------------------------------------------
 # SYSTEM INFORMATION
