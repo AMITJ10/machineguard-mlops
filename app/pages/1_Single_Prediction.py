@@ -28,100 +28,153 @@ if st.button("📂 Load Example Data", use_container_width=True):
     st.session_state["torque"] = 42.8
     st.session_state["wear"] = 0.0
 
-with st.form("prediction_form"):
+# ---------------------------------------------------------
+# Realistic operating ranges (narrower than the API's hard validation
+# bounds). Values outside these are physically valid but unreliable —
+# the field is flagged and the Predict button stays disabled until the
+# reading is corrected.
+# ---------------------------------------------------------
 
-    left, right = st.columns(2)
+_RANGES = {
+    "air": (295.0, 305.0, "Air Temperature (K)"),
+    "process": (305.0, 315.0, "Process Temperature (K)"),
+    "speed": (1150.0, 2900.0, "Rotational Speed (RPM)"),
+    "torque": (3.0, 77.0, "Torque (Nm)"),
+    "wear": (0.0, 253.0, "Tool Wear (minutes)"),
+}
 
-    machine_type_labels = {
-        "L": "L — Low grade (economy build, lower stress tolerance)",
-        "M": "M — Medium grade (standard build)",
-        "H": "H — High grade (heavy-duty, higher stress tolerance)",
-    }
-    machine_type_options = list(machine_type_labels.keys())
 
-    with left:
+def _range_check(value: float, key: str) -> bool:
+    """Return True if value is within the realistic operating range."""
+    lo, hi, _label = _RANGES[key]
+    return lo <= value <= hi
 
-        machine_type = st.selectbox(
-            "Machine Type",
-            machine_type_options,
-            index=machine_type_options.index(
-                st.session_state.get("machine_type", "M")
-            ),
-            format_func=lambda code: machine_type_labels[code],
-            help=(
-                "Manufacturing quality grade of the machine. Lower grades "
-                "have lower tolerance to combined wear and torque stress."
-            ),
-        )
 
-        air_temperature = st.number_input(
-            "Air Temperature (K) — Range: 250 to 400",
-            min_value=250.0,
-            max_value=400.0,
-            value=st.session_state.get("air", 298.1),
-            step=0.1,
-        )
+left, right = st.columns(2)
 
-        process_temperature = st.number_input(
-            "Process Temperature (K) — Range: 250 to 450",
-            min_value=250.0,
-            max_value=450.0,
-            value=st.session_state.get("process", 308.6),
-            step=0.1,
-        )
+machine_type_labels = {
+    "L": "L — Low grade (economy build, lower stress tolerance)",
+    "M": "M — Medium grade (standard build)",
+    "H": "H — High grade (heavy-duty, higher stress tolerance)",
+}
+machine_type_options = list(machine_type_labels.keys())
 
-    with right:
+with left:
 
-        rotational_speed = st.number_input(
-            "Rotational Speed (RPM) — Range: 0 to 5000",
-            min_value=0.0,
-            max_value=5000.0,
-            value=st.session_state.get("speed", 1551.0),
-            step=1.0,
-        )
-
-        torque = st.number_input(
-            "Torque (Nm) — Range: 0 to 200",
-            min_value=0.0,
-            max_value=200.0,
-            value=st.session_state.get("torque", 42.8),
-            step=0.1,
-        )
-
-        tool_wear = st.number_input(
-            "Tool Wear (minutes) — Range: 0 to 500",
-            min_value=0.0,
-            max_value=500.0,
-            value=st.session_state.get("wear", 0.0),
-            step=1.0,
-        )
-
-    submitted = st.form_submit_button(
-        "🚀 Predict Failure",
-        use_container_width=True,
+    machine_type = st.selectbox(
+        "Machine Type",
+        machine_type_options,
+        index=machine_type_options.index(
+            st.session_state.get("machine_type", "M")
+        ),
+        format_func=lambda code: machine_type_labels[code],
+        help=(
+            "Manufacturing quality grade of the machine. Lower grades "
+            "have lower tolerance to combined wear and torque stress."
+        ),
     )
+
+    air_temperature = st.number_input(
+        "Air Temperature (K) — Range: 250 to 400",
+        min_value=250.0,
+        max_value=400.0,
+        value=st.session_state.get("air", 298.1),
+        step=0.1,
+        key="air",
+    )
+    if not _range_check(air_temperature, "air"):
+        lo, hi, _ = _RANGES["air"]
+        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} K).]")
+
+    process_temperature = st.number_input(
+        "Process Temperature (K) — Range: 250 to 450",
+        min_value=250.0,
+        max_value=450.0,
+        value=st.session_state.get("process", 308.6),
+        step=0.1,
+        key="process",
+    )
+    if not _range_check(process_temperature, "process"):
+        lo, hi, _ = _RANGES["process"]
+        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} K).]")
+
+with right:
+
+    rotational_speed = st.number_input(
+        "Rotational Speed (RPM) — Range: 0 to 5000",
+        min_value=0.0,
+        max_value=5000.0,
+        value=st.session_state.get("speed", 1551.0),
+        step=1.0,
+        key="speed",
+    )
+    if not _range_check(rotational_speed, "speed"):
+        lo, hi, _ = _RANGES["speed"]
+        st.markdown(f":red[⚠ Outside realistic operating range ({lo:.0f}-{hi:.0f} RPM).]")
+
+    torque = st.number_input(
+        "Torque (Nm) — Range: 0 to 200",
+        min_value=0.0,
+        max_value=200.0,
+        value=st.session_state.get("torque", 42.8),
+        step=0.1,
+        key="torque",
+    )
+    if not _range_check(torque, "torque"):
+        lo, hi, _ = _RANGES["torque"]
+        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} Nm).]")
+
+    tool_wear = st.number_input(
+        "Tool Wear (minutes) — Range: 0 to 500",
+        min_value=0.0,
+        max_value=500.0,
+        value=st.session_state.get("wear", 0.0),
+        step=1.0,
+        key="wear",
+    )
+    if not _range_check(tool_wear, "wear"):
+        lo, hi, _ = _RANGES["wear"]
+        st.markdown(f":red[⚠ Outside realistic operating range ({lo:.0f}-{hi:.0f} min).]")
+
+all_valid = all(
+    _range_check(value, key)
+    for key, value in {
+        "air": air_temperature,
+        "process": process_temperature,
+        "speed": rotational_speed,
+        "torque": torque,
+        "wear": tool_wear,
+    }.items()
+)
+
+if not all_valid:
+    st.warning(
+        "One or more readings are outside the realistic operating range. "
+        "Correct the highlighted fields to enable prediction."
+    )
+
+submitted = st.button(
+    "🚀 Predict Failure",
+    use_container_width=True,
+    disabled=not all_valid,
+)
 
 # ---------------------------------------------------------
 # Failure-mechanism analysis
 #
 # Each rule below maps to a documented failure mode used in industrial
-# predictive-maintenance datasets. Findings are split into two groups:
-#   - Mechanism findings: an actual physical failure mode is implicated,
-#     with cause, inspection checklist, and corrective action.
-#   - Data quality notes: the reading itself looks unreliable rather
-#     than indicating a mechanical problem.
+# predictive-maintenance datasets. Since inputs are already validated
+# to a realistic operating range before this point, findings here are
+# genuine mechanical failure conditions, not sensor/data-quality issues.
 # ---------------------------------------------------------
 
 _OVERSTRAIN_LIMITS = {"L": 11_000, "M": 12_000, "H": 13_000}
 
 
-def analyze_risk_factors(
-    payload: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Identify failure mechanisms and data-quality issues in the input."""
+def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Identify which physical failure mechanism is implicated."""
 
-    mechanism_findings: list[dict[str, Any]] = []
-    data_quality_findings: list[dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
 
     air_temp = payload["air_temperature"]
     process_temp = payload["process_temperature"]
@@ -133,7 +186,7 @@ def analyze_risk_factors(
     # --- Heat Dissipation Failure ---
     temp_diff = process_temp - air_temp
     if temp_diff < 8.6 and rpm < 1380:
-        mechanism_findings.append(
+        findings.append(
             {
                 "factor": "Heat Dissipation Failure",
                 "severity": "high",
@@ -193,7 +246,7 @@ def analyze_risk_factors(
                 "coupling/gearbox for signs of overload stress (unusual noise, vibration, heat)."
             )
 
-        mechanism_findings.append(
+        findings.append(
             {
                 "factor": "Power Delivery Failure",
                 "severity": "high",
@@ -212,7 +265,7 @@ def analyze_risk_factors(
     overstrain_score = wear * torque_value
     limit = _OVERSTRAIN_LIMITS.get(machine_type, 12_000)
     if overstrain_score > limit:
-        mechanism_findings.append(
+        findings.append(
             {
                 "factor": "Overstrain Failure",
                 "severity": "high",
@@ -241,7 +294,7 @@ def analyze_risk_factors(
 
     # --- Tool Wear Failure ---
     if 200 <= wear <= 240:
-        mechanism_findings.append(
+        findings.append(
             {
                 "factor": "Tool Wear Failure",
                 "severity": "medium",
@@ -264,32 +317,7 @@ def analyze_risk_factors(
             }
         )
 
-    # --- Data quality: out-of-range readings ---
-    if not (250 <= air_temp <= 320) or not (250 <= process_temp <= 330):
-        data_quality_findings.append(
-            {
-                "factor": "Temperature Reading Out of Recommended Range",
-                "detail": (
-                    "Air or process temperature falls outside the recommended "
-                    "operating range for reliable readings."
-                ),
-                "action": "Confirm the sensor reading and unit (Kelvin) before acting on this prediction. Check for a stuck or drifting temperature sensor.",
-            }
-        )
-
-    if not (500 <= rpm <= 3000):
-        data_quality_findings.append(
-            {
-                "factor": "Rotational Speed Out of Recommended Range",
-                "detail": (
-                    f"{rpm:.0f} RPM falls outside the recommended operating "
-                    "range for this machine class."
-                ),
-                "action": "Confirm this speed reading is correct — check the tachometer/encoder signal before acting on this prediction.",
-            }
-        )
-
-    return mechanism_findings, data_quality_findings
+    return findings
 
 
 if submitted:
@@ -338,12 +366,12 @@ if submitted:
         st.divider()
         st.subheader("🔍 Focus Areas & Preventive Actions", anchor=False)
 
-        mechanism_findings, data_quality_findings = analyze_risk_factors(payload)
+        findings = analyze_risk_factors(payload)
 
-        if mechanism_findings:
+        if findings:
             severity_icon = {"high": "🔴", "medium": "🟠", "low": "🟡"}
 
-            for finding in mechanism_findings:
+            for finding in findings:
                 icon = severity_icon.get(finding["severity"], "🟡")
 
                 with st.expander(f"{icon} {finding['factor']}", expanded=True):
@@ -369,8 +397,3 @@ if submitted:
                 "normal operating bounds. Continue routine monitoring and "
                 "scheduled maintenance."
             )
-
-        if data_quality_findings:
-            st.markdown("**Data quality notes:**")
-            for note in data_quality_findings:
-                st.markdown(f"- **{note['factor']}:** {note['detail']} {note['action']}")
