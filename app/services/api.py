@@ -1,9 +1,9 @@
-"""Shared API client for MachineGuard."""
+"""Shared API client for MachineGuard AI."""
 
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Union
 
 import pandas as pd
 import requests
@@ -14,6 +14,7 @@ API_URL = os.getenv(
 ).rstrip("/")
 
 TIMEOUT = 30
+HEALTH_TIMEOUT = 10
 
 
 class APIError(Exception):
@@ -21,87 +22,70 @@ class APIError(Exception):
 
 
 def get_health() -> dict[str, Any]:
-    """Health endpoint."""
-
-    response = requests.get(
-        f"{API_URL}/health",
-        timeout=5,
-    )
-
-    response.raise_for_status()
-
-    return response.json()
+    """Health endpoint check."""
+    try:
+        response = requests.get(
+            f"{API_URL}/health",
+            timeout=HEALTH_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        raise APIError(str(exc)) from exc
 
 
 def get_ready() -> dict[str, Any]:
-    """Ready endpoint."""
-
-    response = requests.get(
-        f"{API_URL}/ready",
-        timeout=5,
-    )
-
-    response.raise_for_status()
-
-    return response.json()
+    """Ready endpoint check."""
+    try:
+        response = requests.get(
+            f"{API_URL}/ready",
+            timeout=HEALTH_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        raise APIError(str(exc)) from exc
 
 
 def predict(payload: dict[str, Any]) -> dict[str, Any]:
-    """Single prediction."""
-
+    """Single prediction request."""
     try:
-
         response = requests.post(
             f"{API_URL}/predict",
             json=payload,
             timeout=TIMEOUT,
         )
-
         response.raise_for_status()
-
         return response.json()
-
     except requests.RequestException as exc:
         raise APIError(str(exc)) from exc
 
 
 def batch_predict(
-    records: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Batch prediction."""
+    data: Union[list[dict[str, Any]], pd.DataFrame],
+) -> Union[list[dict[str, Any]], pd.DataFrame]:
+    """Batch prediction supporting both list of dicts and pandas DataFrame."""
+    if isinstance(data, pd.DataFrame):
+        results = []
+        for _, row in data.iterrows():
+            payload = row.to_dict()
+            pred = predict(payload)
+            payload["prediction"] = pred.get("prediction")
+            payload["failure_probability"] = pred.get("failure_probability")
+            payload["risk_level"] = pred.get("risk_level")
+            results.append(payload)
+        return pd.DataFrame(results)
 
-    results = []
+    elif isinstance(data, list):
+        results = []
+        for record in data:
+            record_copy = record.copy()
+            pred = predict(record_copy)
+            record_copy["prediction"] = pred.get("prediction")
+            record_copy["failure_probability"] = pred.get("failure_probability")
+            record_copy["risk_level"] = pred.get("risk_level")
+            results.append(record_copy)
+        return results
 
-    for record in records:
-
-        prediction = predict(record)
-
-        record["prediction"] = prediction["prediction"]
-        record["failure_probability"] = prediction[
-            "failure_probability"
-        ]
-        record["risk_level"] = prediction[
-            "risk_level"
-        ]
-
-        results.append(record)
-
-    return results
-
-    for _, row in dataframe.iterrows():
-
-        payload = row.to_dict()
-
-        prediction = predict(payload)
-
-        payload["prediction"] = prediction["prediction"]
-        payload["failure_probability"] = prediction[
-            "failure_probability"
-        ]
-        payload["risk_level"] = prediction[
-            "risk_level"
-        ]
-
-        results.append(payload)
-
-    return pd.DataFrame(results)
+    else:
+        raise ValueError("Data must be a list of dicts or a pandas DataFrame")
