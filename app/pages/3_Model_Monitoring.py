@@ -382,37 +382,37 @@ st.divider()
 # SYSTEM INFORMATION
 # ----------------------------------------------------
 
-st.subheader("System Information")
+# st.subheader("System Information")
 
-info = pd.DataFrame(
-    {
-        "Component": [
-            "Frontend",
-            "Backend",
-            "Model",
-            "Deployment",
-            "Environment",
-        ],
-        "Value": [
-            "Streamlit",
-            "FastAPI",
-            (
-                ready.get(
-                    "model_name",
-                    "-"
-                )
-                if ready
-                else "-"
-            ),
-            "Render",
-            "Production",
-        ],
-    }
-)
+# info = pd.DataFrame(
+#     {
+#         "Component": [
+#             "Frontend",
+#             "Backend",
+#             "Model",
+#             "Deployment",
+#             "Environment",
+#         ],
+#         "Value": [
+#             "Streamlit",
+#             "FastAPI",
+#             (
+#                 ready.get(
+#                     "model_name",
+#                     "-"
+#                 )
+#                 if ready
+#                 else "-"
+#             ),
+#             "Render",
+#             "Production",
+#         ],
+#     }
+# )
 
-st.table(info)
+# st.table(info)
 
-st.divider()
+# st.divider()
 
 # ----------------------------------------------------
 # QUICK LINKS
