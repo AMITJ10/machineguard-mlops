@@ -102,16 +102,26 @@ with st.form("prediction_form"):
     )
 
 # ---------------------------------------------------------
-# Rule-based explanation of which condition is driving the risk score.
+# Failure-mechanism analysis
+#
+# Each rule below maps to a documented failure mode used in industrial
+# predictive-maintenance datasets. Findings are split into two groups:
+#   - Mechanism findings: an actual physical failure mode is implicated,
+#     with cause, inspection checklist, and corrective action.
+#   - Data quality notes: the reading itself looks unreliable rather
+#     than indicating a mechanical problem.
 # ---------------------------------------------------------
 
 _OVERSTRAIN_LIMITS = {"L": 11_000, "M": 12_000, "H": 13_000}
 
 
-def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
-    """Identify which operating condition is closest to a failure threshold."""
+def analyze_risk_factors(
+    payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Identify failure mechanisms and data-quality issues in the input."""
 
-    findings: list[dict[str, str]] = []
+    mechanism_findings: list[dict[str, Any]] = []
+    data_quality_findings: list[dict[str, Any]] = []
 
     air_temp = payload["air_temperature"]
     process_temp = payload["process_temperature"]
@@ -120,113 +130,166 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
     wear = payload["tool_wear"]
     machine_type = payload["machine_type"]
 
-    # --- Heat Dissipation ---
+    # --- Heat Dissipation Failure ---
     temp_diff = process_temp - air_temp
     if temp_diff < 8.6 and rpm < 1380:
-        findings.append(
+        mechanism_findings.append(
             {
-                "factor": "Heat Dissipation",
+                "factor": "Heat Dissipation Failure",
                 "severity": "high",
-                "detail": (
-                    f"Process/air temperature gap is only {temp_diff:.1f} K "
-                    f"(below 8.6 K) while rotational speed is {rpm:.0f} RPM "
-                    "(below 1380). Low airflow at low speed is limiting heat "
-                    "dissipation."
+                "cause": (
+                    f"The gap between process and air temperature is only "
+                    f"{temp_diff:.1f} K (below the 8.6 K margin needed for "
+                    f"adequate cooling), and rotational speed is {rpm:.0f} "
+                    "RPM — too low to generate enough airflow across the "
+                    "motor and bearing housings to carry heat away. Heat is "
+                    "building up faster than the machine can dissipate it."
                 ),
+                "checklist": [
+                    "Check cooling fan operation and airflow path for obstructions or dust buildup.",
+                    "Verify coolant/lubricant flow rate and temperature at the heat exchanger.",
+                    "Inspect bearing housings and motor windings for excessive heat with a thermal camera or IR thermometer.",
+                    "Confirm ambient enclosure temperature isn't elevated by nearby equipment.",
+                ],
                 "action": (
-                    "Increase spindle speed if the process allows it, check "
-                    "for blocked cooling airflow, and verify coolant or fan "
-                    "operation."
+                    "If safe for the process, increase spindle/rotational speed to restore airflow. "
+                    "Clean or replace cooling fan filters, and verify coolant pump output. "
+                    "If temperatures don't recover within one operating cycle, shut down and inspect bearings for heat damage before restarting."
                 ),
             }
         )
 
-    # --- Power Delivery ---
+    # --- Power Delivery Failure ---
     angular_velocity = 2.0 * math.pi * rpm / 60.0
     mechanical_power = torque_value * angular_velocity
     if mechanical_power < 3500 or mechanical_power > 9000:
-        direction = (
-            "below the 3,500 W minimum"
-            if mechanical_power < 3500
-            else "above the 9,000 W maximum"
-        )
-        findings.append(
+        if mechanical_power < 3500:
+            cause = (
+                f"Computed mechanical power is only {mechanical_power:,.0f} W "
+                "for this torque/speed combination — below the 3,500 W "
+                "threshold for stable operation. This typically means the "
+                "machine is running under-loaded relative to its rated "
+                "torque, or the speed setpoint is too low for the torque "
+                "being applied, which can cause the drive to hunt for a "
+                "stable operating point and stress the motor controller."
+            )
+            action = (
+                "Verify the torque and speed setpoints match the actual job requirement — "
+                "an under-loaded combination is often a programming/setpoint error rather than "
+                "a mechanical fault. Check the VFD/motor controller for undervoltage or fault codes."
+            )
+        else:
+            cause = (
+                f"Computed mechanical power is {mechanical_power:,.0f} W — "
+                "above the 9,000 W threshold. The motor and drive train are "
+                "being asked to deliver more power than the rated operating "
+                "envelope, which accelerates wear on bearings, couplings, "
+                "and the motor windings, and increases the risk of an "
+                "overcurrent trip or motor burnout."
+            )
+            action = (
+                "Reduce torque or speed setpoint immediately to bring power draw back within the rated "
+                "envelope. Check the motor's current draw against its nameplate rating, and inspect the "
+                "coupling/gearbox for signs of overload stress (unusual noise, vibration, heat)."
+            )
+
+        mechanism_findings.append(
             {
-                "factor": "Power Delivery",
+                "factor": "Power Delivery Failure",
                 "severity": "high",
-                "detail": (
-                    f"Computed mechanical power is {mechanical_power:,.0f} W, "
-                    f"{direction} for stable operation given this torque/RPM "
-                    "combination."
-                ),
-                "action": (
-                    "Re-check torque and speed setpoints together, or "
-                    "inspect the drive/motor for under- or over-powering."
-                ),
+                "cause": cause,
+                "checklist": [
+                    "Check the motor drive/VFD for fault codes or current draw outside rated limits.",
+                    "Inspect the coupling, belt, or gearbox for slippage, wear, or misalignment.",
+                    "Confirm torque and speed setpoints match the intended process, not a leftover test configuration.",
+                    "Listen/feel for abnormal vibration or noise at the motor and drive train under load.",
+                ],
+                "action": action,
             }
         )
 
-    # --- Overstrain (Tool Wear x Torque) ---
+    # --- Overstrain Failure (Tool Wear x Torque) ---
     overstrain_score = wear * torque_value
     limit = _OVERSTRAIN_LIMITS.get(machine_type, 12_000)
     if overstrain_score > limit:
-        findings.append(
+        mechanism_findings.append(
             {
-                "factor": "Overstrain (Tool Wear × Torque)",
+                "factor": "Overstrain Failure",
                 "severity": "high",
-                "detail": (
-                    f"Tool wear × torque = {overstrain_score:,.0f}, above the "
-                    f"{limit:,} limit for a type-{machine_type} machine."
+                "cause": (
+                    f"Combined tool wear and torque load ({overstrain_score:,.0f}) "
+                    f"exceeds the {limit:,} limit rated for a type-{machine_type} "
+                    "machine. A worn cutting tool needs more torque to remove "
+                    "the same amount of material, and that extra mechanical "
+                    "stress is transmitted through the spindle, tool holder, "
+                    "and workpiece — raising the risk of tool breakage or "
+                    "spindle damage."
                 ),
+                "checklist": [
+                    "Inspect the cutting tool or tool tip for visible wear, chipping, or edge rounding.",
+                    "Check tool holder/collet for looseness or runout.",
+                    "Review recent tool-change logs — is this tool overdue for replacement?",
+                    "Inspect the spindle for unusual vibration or noise under load.",
+                ],
                 "action": (
-                    "Schedule tool replacement soon and reduce torque load "
-                    "if possible until the tool is swapped."
+                    "Replace or re-sharpen the tool before continuing production. "
+                    "Reduce feed rate or torque temporarily if the job must continue before a scheduled changeover. "
+                    "Log the wear reading against the tool's rated service life to catch this earlier next time."
                 ),
             }
         )
 
-    # --- Tool Wear ---
+    # --- Tool Wear Failure ---
     if 200 <= wear <= 240:
-        findings.append(
+        mechanism_findings.append(
             {
-                "factor": "Tool Wear",
+                "factor": "Tool Wear Failure",
                 "severity": "medium",
-                "detail": (
-                    f"Tool wear is {wear:.0f} minutes, inside the 200-240 "
-                    "minute band where tool failures cluster."
+                "cause": (
+                    f"Accumulated tool wear is {wear:.0f} minutes, inside the "
+                    "200-240 minute band where random tool-failure incidents "
+                    "cluster in this equipment class — this is close to the "
+                    "statistical end of a typical tool's usable service life."
                 ),
-                "action": "Plan a tool inspection/replacement in the next maintenance window.",
+                "checklist": [
+                    "Check tool wear against the manufacturer's rated tool life for this material/operation.",
+                    "Visually inspect the cutting edge for micro-chipping or built-up edge.",
+                    "Review the last few parts produced for dimensional drift or surface-finish degradation.",
+                ],
+                "action": (
+                    "Schedule a tool change at the next planned stop rather than waiting for a failure. "
+                    "If this tool is being pushed past its rated life regularly, consider adjusting the "
+                    "preventive-maintenance interval for this tool type."
+                ),
             }
         )
 
-    # --- Out-of-range sensor readings ---
+    # --- Data quality: out-of-range readings ---
     if not (250 <= air_temp <= 320) or not (250 <= process_temp <= 330):
-        findings.append(
+        data_quality_findings.append(
             {
                 "factor": "Temperature Reading Out of Recommended Range",
-                "severity": "low",
                 "detail": (
-                    "Air or process temperature falls outside the "
-                    "recommended operating range for reliable readings."
+                    "Air or process temperature falls outside the recommended "
+                    "operating range for reliable readings."
                 ),
-                "action": "Confirm the sensor reading and unit (Kelvin) before acting on this prediction.",
+                "action": "Confirm the sensor reading and unit (Kelvin) before acting on this prediction. Check for a stuck or drifting temperature sensor.",
             }
         )
 
     if not (500 <= rpm <= 3000):
-        findings.append(
+        data_quality_findings.append(
             {
                 "factor": "Rotational Speed Out of Recommended Range",
-                "severity": "low",
                 "detail": (
                     f"{rpm:.0f} RPM falls outside the recommended operating "
                     "range for this machine class."
                 ),
-                "action": "Confirm this speed reading is correct before acting on this prediction.",
+                "action": "Confirm this speed reading is correct — check the tachometer/encoder signal before acting on this prediction.",
             }
         )
 
-    return findings
+    return mechanism_findings, data_quality_findings
 
 
 if submitted:
@@ -275,19 +338,39 @@ if submitted:
         st.divider()
         st.subheader("🔍 Focus Areas & Preventive Actions", anchor=False)
 
-        findings = analyze_risk_factors(payload)
+        mechanism_findings, data_quality_findings = analyze_risk_factors(payload)
 
-        if not findings:
-            st.info(
-                "No single condition stands out — readings are within "
-                "normal operating bounds. Continue routine monitoring."
-            )
-        else:
+        if mechanism_findings:
             severity_icon = {"high": "🔴", "medium": "🟠", "low": "🟡"}
 
-            for finding in findings:
+            for finding in mechanism_findings:
                 icon = severity_icon.get(finding["severity"], "🟡")
 
                 with st.expander(f"{icon} {finding['factor']}", expanded=True):
-                    st.write(finding["detail"])
+                    st.markdown(f"**Likely cause:** {finding['cause']}")
+
+                    st.markdown("**Inspection checklist:**")
+                    for item in finding["checklist"]:
+                        st.markdown(f"- {item}")
+
                     st.markdown(f"**Recommended action:** {finding['action']}")
+
+        elif result["risk_level"] in ("high", "critical"):
+            st.warning(
+                "The model flagged elevated risk, but no single known "
+                "failure mechanism explains it on its own — this can happen "
+                "with an unusual combination of readings. Schedule a general "
+                "inspection covering cooling, drive load, and tool condition "
+                "rather than relying on one specific fix."
+            )
+        else:
+            st.info(
+                "No failure mechanism is indicated — readings are within "
+                "normal operating bounds. Continue routine monitoring and "
+                "scheduled maintenance."
+            )
+
+        if data_quality_findings:
+            st.markdown("**Data quality notes:**")
+            for note in data_quality_findings:
+                st.markdown(f"- **{note['factor']}:** {note['detail']} {note['action']}")
