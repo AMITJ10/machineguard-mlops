@@ -222,47 +222,47 @@ st.divider()
 # Deployment Information
 # ---------------------------------------------------------
 
-st.subheader("Deployment")
+# st.subheader("Deployment")
 
-left, right = st.columns(2)
+# left, right = st.columns(2)
 
-with left:
+# with left:
 
-    st.info(
-        f"""
-**Backend URL**
+#     st.info(
+#         f"""
+# **Backend URL**
 
-{API_URL}
+# {API_URL}
 
-**Environment**
+# **Environment**
 
-Production
+# Production
 
-**Hosting**
+# **Hosting**
 
-Render
-"""
-    )
+# Render
+# """
+#     )
 
-with right:
+# with right:
 
-    st.info(
-        """
-**Frontend**
+#     st.info(
+#         """
+# **Frontend**
 
-Streamlit Cloud
+# Streamlit Cloud
 
-**Container**
+# **Container**
 
-Docker
+# Docker
 
-**Framework**
+# **Framework**
 
-FastAPI
-"""
-    )
+# FastAPI
+# """
+#     )
 
-st.divider()
+# st.divider()
 
 # ---------------------------------------------------------
 # Quick Links
