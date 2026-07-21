@@ -74,8 +74,9 @@ with left:
         ),
     )
 
+    lo, hi, _ = _RANGES["air"]
     air_temperature = st.number_input(
-        "Air Temperature (K) — Range: 250 to 400",
+        f"Air Temperature (K) — Valid Range: {lo:.0f} to {hi:.0f}",
         min_value=250.0,
         max_value=400.0,
         value=st.session_state.get("air", 298.1),
@@ -83,11 +84,11 @@ with left:
         key="air",
     )
     if not _range_check(air_temperature, "air"):
-        lo, hi, _ = _RANGES["air"]
-        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} K).]")
+        st.markdown(f":red[⚠ Must be between {lo:.0f} and {hi:.0f} K.]")
 
+    lo, hi, _ = _RANGES["process"]
     process_temperature = st.number_input(
-        "Process Temperature (K) — Range: 250 to 450",
+        f"Process Temperature (K) — Valid Range: {lo:.0f} to {hi:.0f}",
         min_value=250.0,
         max_value=450.0,
         value=st.session_state.get("process", 308.6),
@@ -95,13 +96,13 @@ with left:
         key="process",
     )
     if not _range_check(process_temperature, "process"):
-        lo, hi, _ = _RANGES["process"]
-        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} K).]")
+        st.markdown(f":red[⚠ Must be between {lo:.0f} and {hi:.0f} K.]")
 
 with right:
 
+    lo, hi, _ = _RANGES["speed"]
     rotational_speed = st.number_input(
-        "Rotational Speed (RPM) — Range: 0 to 5000",
+        f"Rotational Speed (RPM) — Valid Range: {lo:.0f} to {hi:.0f}",
         min_value=0.0,
         max_value=5000.0,
         value=st.session_state.get("speed", 1551.0),
@@ -109,11 +110,11 @@ with right:
         key="speed",
     )
     if not _range_check(rotational_speed, "speed"):
-        lo, hi, _ = _RANGES["speed"]
-        st.markdown(f":red[⚠ Outside realistic operating range ({lo:.0f}-{hi:.0f} RPM).]")
+        st.markdown(f":red[⚠ Must be between {lo:.0f} and {hi:.0f} RPM.]")
 
+    lo, hi, _ = _RANGES["torque"]
     torque = st.number_input(
-        "Torque (Nm) — Range: 0 to 200",
+        f"Torque (Nm) — Valid Range: {lo:.0f} to {hi:.0f}",
         min_value=0.0,
         max_value=200.0,
         value=st.session_state.get("torque", 42.8),
@@ -121,11 +122,11 @@ with right:
         key="torque",
     )
     if not _range_check(torque, "torque"):
-        lo, hi, _ = _RANGES["torque"]
-        st.markdown(f":red[⚠ Outside realistic operating range ({lo}-{hi} Nm).]")
+        st.markdown(f":red[⚠ Must be between {lo:.0f} and {hi:.0f} Nm.]")
 
+    lo, hi, _ = _RANGES["wear"]
     tool_wear = st.number_input(
-        "Tool Wear (minutes) — Range: 0 to 500",
+        f"Tool Wear (minutes) — Valid Range: {lo:.0f} to {hi:.0f}",
         min_value=0.0,
         max_value=500.0,
         value=st.session_state.get("wear", 0.0),
@@ -133,8 +134,7 @@ with right:
         key="wear",
     )
     if not _range_check(tool_wear, "wear"):
-        lo, hi, _ = _RANGES["wear"]
-        st.markdown(f":red[⚠ Outside realistic operating range ({lo:.0f}-{hi:.0f} min).]")
+        st.markdown(f":red[⚠ Must be between {lo:.0f} and {hi:.0f} minutes.]")
 
 all_valid = all(
     _range_check(value, key)
