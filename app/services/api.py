@@ -98,23 +98,42 @@ def predict(payload: dict[str, Any]) -> dict[str, Any]:
     """Single prediction."""
 
     try:
+
         response = requests.post(
             f"{API_URL}/predict",
             json=payload,
-            timeout=TIMEOUT,
+            timeout=60,
         )
+
+        print(response.status_code)
+        print(response.text)
+
         response.raise_for_status()
+
         result = response.json()
 
-        try:
-            _log_activity("Single Prediction", 1, result.get("risk_level"))
-        except Exception:
-            pass  # dashboard logging should never break a real prediction
+        _log_activity(
+            "Single Prediction",
+            1,
+            result.get("risk_level"),
+        )
 
         return result
 
-    except requests.RequestException as exc:
-        raise APIError(str(exc)) from exc
+    except requests.HTTPError as exc:
+
+        raise APIError(
+            f"""
+Status Code: {exc.response.status_code}
+
+Body:
+{exc.response.text}
+"""
+        ) from exc
+
+    except Exception as exc:
+
+        raise APIError(str(exc))
 
 
 def batch_predict(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
