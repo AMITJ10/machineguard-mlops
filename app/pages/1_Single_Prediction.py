@@ -50,56 +50,50 @@ with st.form("prediction_form"):
             format_func=lambda code: machine_type_labels[code],
             help=(
                 "Manufacturing quality grade of the machine. Lower grades "
-                "have lower tolerance to combined wear and torque stress "
-                "(see Overstrain checks below)."
+                "have lower tolerance to combined wear and torque stress."
             ),
         )
 
         air_temperature = st.number_input(
-            "Air Temperature (K)",
+            "Air Temperature (K) — Range: 250 to 400",
             min_value=250.0,
             max_value=400.0,
             value=st.session_state.get("air", 298.1),
             step=0.1,
-            help="Valid range: 250-400 K. Typical operating range: 295-305 K.",
         )
 
         process_temperature = st.number_input(
-            "Process Temperature (K)",
+            "Process Temperature (K) — Range: 250 to 450",
             min_value=250.0,
             max_value=450.0,
             value=st.session_state.get("process", 308.6),
             step=0.1,
-            help="Valid range: 250-450 K. Typical operating range: 305-315 K.",
         )
 
     with right:
 
         rotational_speed = st.number_input(
-            "Rotational Speed (RPM)",
+            "Rotational Speed (RPM) — Range: 0 to 5000",
             min_value=0.0,
             max_value=5000.0,
             value=st.session_state.get("speed", 1551.0),
             step=1.0,
-            help="Valid range: 0-5000 RPM. Typical operating range: 1150-2900 RPM.",
         )
 
         torque = st.number_input(
-            "Torque (Nm)",
+            "Torque (Nm) — Range: 0 to 200",
             min_value=0.0,
             max_value=200.0,
             value=st.session_state.get("torque", 42.8),
             step=0.1,
-            help="Valid range: 0-200 Nm. Typical operating range: 3-77 Nm.",
         )
 
         tool_wear = st.number_input(
-            "Tool Wear (minutes)",
+            "Tool Wear (minutes) — Range: 0 to 500",
             min_value=0.0,
             max_value=500.0,
             value=st.session_state.get("wear", 0.0),
             step=1.0,
-            help="Valid range: 0-500 minutes. Typical operating range: 0-250 minutes.",
         )
 
     submitted = st.form_submit_button(
@@ -108,22 +102,14 @@ with st.form("prediction_form"):
     )
 
 # ---------------------------------------------------------
-# Rule-based explanation of *why* a prediction is high/low risk.
-#
-# These thresholds mirror the known failure mechanisms used to label
-# this style of predictive-maintenance dataset (heat dissipation,
-# power, overstrain, and tool-wear failure modes). The trained model
-# has learned these patterns from data; this panel makes the same
-# logic visible in plain language so the "critical risk" verdict is
-# explainable and actionable, not just a probability.
+# Rule-based explanation of which condition is driving the risk score.
 # ---------------------------------------------------------
 
-# Overstrain failure threshold (tool_wear * torque) depends on machine type.
 _OVERSTRAIN_LIMITS = {"L": 11_000, "M": 12_000, "H": 13_000}
 
 
 def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
-    """Identify which physical failure mechanisms this input is close to."""
+    """Identify which operating condition is closest to a failure threshold."""
 
     findings: list[dict[str, str]] = []
 
@@ -134,7 +120,7 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
     wear = payload["tool_wear"]
     machine_type = payload["machine_type"]
 
-    # --- Heat Dissipation Failure ---
+    # --- Heat Dissipation ---
     temp_diff = process_temp - air_temp
     if temp_diff < 8.6 and rpm < 1380:
         findings.append(
@@ -155,11 +141,15 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
-    # --- Power Failure ---
+    # --- Power Delivery ---
     angular_velocity = 2.0 * math.pi * rpm / 60.0
     mechanical_power = torque_value * angular_velocity
     if mechanical_power < 3500 or mechanical_power > 9000:
-        direction = "below the 3,500 W minimum" if mechanical_power < 3500 else "above the 9,000 W maximum"
+        direction = (
+            "below the 3,500 W minimum"
+            if mechanical_power < 3500
+            else "above the 9,000 W maximum"
+        )
         findings.append(
             {
                 "factor": "Power Delivery",
@@ -170,14 +160,13 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
                     "combination."
                 ),
                 "action": (
-                    "Re-check torque and speed setpoints together — they may "
-                    "be an unrealistic combination for this machine — or "
+                    "Re-check torque and speed setpoints together, or "
                     "inspect the drive/motor for under- or over-powering."
                 ),
             }
         )
 
-    # --- Overstrain Failure ---
+    # --- Overstrain (Tool Wear x Torque) ---
     overstrain_score = wear * torque_value
     limit = _OVERSTRAIN_LIMITS.get(machine_type, 12_000)
     if overstrain_score > limit:
@@ -196,7 +185,7 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
-    # --- Tool Wear Failure ---
+    # --- Tool Wear ---
     if 200 <= wear <= 240:
         findings.append(
             {
@@ -210,32 +199,30 @@ def analyze_risk_factors(payload: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
 
-    # --- Out-of-range inputs (extrapolation warning) ---
+    # --- Out-of-range sensor readings ---
     if not (250 <= air_temp <= 320) or not (250 <= process_temp <= 330):
         findings.append(
             {
-                "factor": "Unusual Temperature Reading",
+                "factor": "Temperature Reading Out of Recommended Range",
                 "severity": "low",
                 "detail": (
-                    "Air or process temperature is well outside the range "
-                    "the model was trained on (roughly 295-315 K). "
-                    "Predictions on out-of-range sensor data extrapolate "
-                    "and can be overconfident."
+                    "Air or process temperature falls outside the "
+                    "recommended operating range for reliable readings."
                 ),
-                "action": "Double-check the sensor reading and unit (Kelvin) before acting on this prediction.",
+                "action": "Confirm the sensor reading and unit (Kelvin) before acting on this prediction.",
             }
         )
 
     if not (500 <= rpm <= 3000):
         findings.append(
             {
-                "factor": "Unusual Rotational Speed",
+                "factor": "Rotational Speed Out of Recommended Range",
                 "severity": "low",
                 "detail": (
-                    f"{rpm:.0f} RPM is outside the typical operating range "
-                    "the model was trained on (roughly 1170-2900 RPM)."
+                    f"{rpm:.0f} RPM falls outside the recommended operating "
+                    "range for this machine class."
                 ),
-                "action": "Confirm this speed reading is correct for the machine before trusting the prediction.",
+                "action": "Confirm this speed reading is correct before acting on this prediction.",
             }
         )
 
@@ -292,8 +279,8 @@ if submitted:
 
         if not findings:
             st.info(
-                "No single failure mechanism stands out — readings look "
-                "within normal operating bounds. Continue routine monitoring."
+                "No single condition stands out — readings are within "
+                "normal operating bounds. Continue routine monitoring."
             )
         else:
             severity_icon = {"high": "🔴", "medium": "🟠", "low": "🟡"}

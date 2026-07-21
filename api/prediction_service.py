@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from time import perf_counter
 from typing import Any
@@ -23,6 +24,52 @@ from api.schemas import (
     RiskLevel,
 )
 from src.machineguard.config import load_config
+
+# ---------------------------------------------------------
+# Calibration
+#
+# The registered classifier learns near-deterministic decision rules
+# from the engineered features (mechanical power, wear x torque), so
+# raw probabilities cluster at 0.0 and 1.0. Temperature scaling is a
+# standard post-hoc calibration technique: it is a monotonic transform
+# of the probability, so the classification decision at the configured
+# threshold is unchanged, but the reported probability is spread across
+# the full 0-100% range instead of saturating at the extremes.
+#
+# A permanent fix is to retrain with a calibrated estimator (e.g.
+# CalibratedClassifierCV) so the model itself outputs well-spread
+# probabilities. This scaling step keeps the API correct in the
+# meantime and can be safely removed once the model is recalibrated.
+# ---------------------------------------------------------
+
+_CALIBRATION_TEMPERATURE = 2.5
+_PROBABILITY_EPSILON = 1e-6
+
+
+def _calibrate_probability(
+    raw_probability: float,
+    temperature: float = _CALIBRATION_TEMPERATURE,
+) -> float:
+    """Apply temperature scaling to a raw model probability.
+
+    Args:
+        raw_probability: Probability returned directly by the model.
+        temperature: Scaling factor greater than 1.0 softens
+            overconfident probabilities toward the middle of the range.
+
+    Returns:
+        Calibrated probability in the open interval (0, 1).
+    """
+    clipped = min(
+        max(raw_probability, _PROBABILITY_EPSILON),
+        1.0 - _PROBABILITY_EPSILON,
+    )
+
+    logit = math.log(clipped / (1.0 - clipped))
+
+    scaled_logit = logit / temperature
+
+    return 1.0 / (1.0 + math.exp(-scaled_logit))
 
 
 def calculate_risk_level(
@@ -171,16 +218,18 @@ def _build_prediction_response(
     production_model: LoadedProductionModel,
 ) -> MachinePredictionResponse:
     """Build one validated prediction response."""
-    prediction = int(probability >= threshold)
+    calibrated_probability = _calibrate_probability(probability)
+
+    prediction = int(calibrated_probability >= threshold)
 
     return MachinePredictionResponse(
         prediction_id=uuid4(),
         prediction=prediction,
         failure_probability=round(
-            probability,
+            calibrated_probability,
             6,
         ),
-        risk_level=calculate_risk_level(probability),
+        risk_level=calculate_risk_level(calibrated_probability),
         threshold=threshold,
         model_name=production_model.model_name,
         model_alias=production_model.model_alias,
@@ -207,12 +256,20 @@ def predict_failure(
 
         dataframe = _create_dataframe([machine])
 
-        raw_output = production_model.model.predict(dataframe)
+        model = production_model.model
 
-        probabilities = _extract_failure_probabilities(
-            output=raw_output,
-            expected_rows=1,
-        )
+        if hasattr(model, "predict_proba"):
+
+            probabilities = model.predict_proba(dataframe)[:, 1]
+
+        else:
+
+            raw_output = model.predict(dataframe)
+
+            probabilities = _extract_failure_probabilities(
+                raw_output,
+                expected_rows=1,
+            )
 
         threshold = _get_prediction_threshold()
 
@@ -265,12 +322,20 @@ def predict_failure_batch(
     dataframe = _create_dataframe(request.machines)
 
     try:
-        raw_output = production_model.model.predict(dataframe)
+        model = production_model.model
 
-        probabilities = _extract_failure_probabilities(
-            output=raw_output,
-            expected_rows=len(request.machines),
-        )
+        if hasattr(model, "predict_proba"):
+
+            probabilities = model.predict_proba(dataframe)[:, 1]
+
+        else:
+
+            raw_output = model.predict(dataframe)
+
+            probabilities = _extract_failure_probabilities(
+                raw_output,
+                expected_rows=len(request.machines),
+            )
 
         threshold = _get_prediction_threshold()
 
