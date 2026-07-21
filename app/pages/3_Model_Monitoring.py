@@ -301,47 +301,47 @@ st.divider()
 # DEPLOYMENT INFORMATION
 # ----------------------------------------------------
 
-st.subheader("Deployment")
+# st.subheader("Deployment")
 
-col1, col2 = st.columns(2)
+# col1, col2 = st.columns(2)
 
-with col1:
+# with col1:
 
-    st.info(
-        f"""
-**Backend API**
+#     st.info(
+#         f"""
+# **Backend API**
 
-{API_URL}
+# {API_URL}
 
-**Frontend**
+# **Frontend**
 
-Streamlit Cloud
+# Streamlit Cloud
 
-**Cloud**
+# **Cloud**
 
-Render
-"""
-    )
+# Render
+# """
+#     )
 
-with col2:
+# with col2:
 
-    st.info(
-        """
-**ML Framework**
+#     st.info(
+#         """
+# **ML Framework**
 
-Scikit-Learn
+# Scikit-Learn
 
-**Experiment Tracking**
+# **Experiment Tracking**
 
-MLflow
+# MLflow
 
-**Containerization**
+# **Containerization**
 
-Docker
-"""
-    )
+# Docker
+# """
+#     )
 
-st.divider()
+# st.divider()
 
 # ----------------------------------------------------
 # ROADMAP
