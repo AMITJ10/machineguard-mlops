@@ -254,6 +254,8 @@ def main() -> None:
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run() as run:
+        print(X_train.columns.tolist())  # debug: confirm column order before fit
+
         model.fit(
             X_train,
             y_train,
@@ -262,7 +264,7 @@ def main() -> None:
         validation_probabilities = model.predict_proba(X_validation)[:, 1]
 
         test_probabilities = model.predict_proba(X_test)[:, 1]
-
+        print("Probabilities:", test_probabilities)
         validation_metrics = evaluate_classifier(
             y_true=y_validation,
             probabilities=validation_probabilities,
